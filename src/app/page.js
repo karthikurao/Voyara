@@ -14,9 +14,11 @@ export default function Home() {
             Tell us your destination and vibe. Our AI will handle the rest.
           </p>
         </div>
-        <div className="mt-12 w-full flex justify-center">
+
+        <div className="mt-12 w-full">
           <GeneratorForm />
         </div>
+        
       </main>
     </>
   );
