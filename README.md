@@ -4,15 +4,9 @@ Voyara is a sleek, modern web application that crafts personalized travel itiner
 
 ---
 
-**(Highly Recommended: Add a GIF or a few screenshots of Voyara in action here!)**
-
-*Example: You can create a GIF using tools like ScreenToGIF (Windows) or Kap (Mac), upload it to your GitHub issue or directly to the repo, and then link it like this:*
-
----
-
 ### 🚀 Live Demo
 
-**Try Voyara live:** [**`https://YOUR_VERCEL_APP_URL.vercel.app`**](https://voyara-x4zm.vercel.app/)
+**Try Voyara live:** [**`voyara-x4zm`**](https://voyara-x4zm.vercel.app/)
 
 ---
 
@@ -102,12 +96,11 @@ Open [http://localhost:3000](http://localhost:3000) in your browser to see the r
 
 ---
 
-### ## 🤝 Contributing (Optional)
+### ## 🤝 Contributing
 
-Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/YOUR_USERNAME/voyara/issues). *(Remove this section if you don't want contributions)*
-
+Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/karthikurao/voyara/issues). 
 ---
 
-### ## 📝 License (Optional)
+### ## 📝 License
 
-This project is licensed under the MIT License - see the `LICENSE.md` file for details. *(Create a LICENSE.md file if you want to include one. MIT is common for open-source projects.)*
+This project is licensed under the MIT License - see the `LICENSE.md` file for details. 
