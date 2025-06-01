@@ -1,7 +1,14 @@
 import Header from "@/components/Header";
 import GeneratorForm from "@/components/GeneratorForm";
+import { createClient } from '@/utils/supabase/server'; // New import
 
-export default function Home() {
+export const dynamic = 'force-dynamic';
+
+export default async function Home() {
+  const supabase = createClient(); // New client creation
+  
+  const { data: { user } } = await supabase.auth.getUser();
+
   return (
     <>
       <Header />
@@ -16,7 +23,7 @@ export default function Home() {
         </div>
 
         <div className="mt-12 w-full">
-          <GeneratorForm />
+          <GeneratorForm user={user} />
         </div>
         
       </main>
