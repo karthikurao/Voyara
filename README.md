@@ -7,14 +7,12 @@ Voyara is a sleek, modern web application that crafts personalized travel itiner
 **(Highly Recommended: Add a GIF or a few screenshots of Voyara in action here!)**
 
 *Example: You can create a GIF using tools like ScreenToGIF (Windows) or Kap (Mac), upload it to your GitHub issue or directly to the repo, and then link it like this:*
-`![Voyara Demo](URL_TO_YOUR_GIF_OR_SCREENSHOT.gif)`
 
 ---
 
 ### 🚀 Live Demo
 
-**Try Voyara live:** [**`https://YOUR_VERCEL_APP_URL.vercel.app`**](https://YOUR_VERCEL_APP_URL.vercel.app)
-*(Replace with your actual Vercel deployment URL)*
+**Try Voyara live:** [**`https://YOUR_VERCEL_APP_URL.vercel.app`**](https://voyara-x4zm.vercel.app/)
 
 ---
 
