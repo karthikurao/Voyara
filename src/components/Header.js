@@ -5,10 +5,10 @@ import { UserCircle2 } from 'lucide-react'; // Generic user icon
 
 // This is our SVG logo placeholder, keep it or replace with your actual logo
 const VoyaraLogo = () => (
-  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    <path d="M6 4L12 16L18 4" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-    <circle cx="12" cy="20" r="1.5" fill="currentColor"/>
-  </svg>
+  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M6 7L12 19L18 7" stroke="#FFFFFF" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="12" cy="4" r="1.5" fill="#FFFFFF"/>
+</svg>
 );
 
 export default async function Header() {

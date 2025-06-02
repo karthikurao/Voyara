@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/utils/supabase/client';
-import { useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation'; // Make sure this is imported
 import Link from 'next/link';
 import Image from 'next/image';
 import { updateProfile } from './actions';
 import { UserCircle2, Edit3, Check, X, UploadCloud } from 'lucide-react';
 
-import ReactCrop, { centerCrop, makeAspectCrop, Crop, PixelCrop } from 'react-image-crop';
+import ReactCrop, { centerCrop, makeAspectCrop } from 'react-image-crop';
 import 'react-image-crop/dist/ReactCrop.css';
 
 // Helper function to generate a centered crop
@@ -29,7 +29,6 @@ async function getCroppedImg(image, crop, fileName) {
   const scaleX = image.naturalWidth / image.width;
   const scaleY = image.naturalHeight / image.height;
   
-  // Ensure crop dimensions are valid numbers
   const cropX = typeof crop.x === 'number' ? crop.x : 0;
   const cropY = typeof crop.y === 'number' ? crop.y : 0;
   const cropWidth = typeof crop.width === 'number' ? crop.width : 0;
@@ -65,18 +64,17 @@ async function getCroppedImg(image, crop, fileName) {
         reject(new Error('Canvas is empty'));
         return;
       }
-      // Use a consistent name or derive from original, ensure unique if needed
       const newFileName = `cropped_${fileName}`; 
       const file = new File([blob], newFileName, { type: blob.type || 'image/png' });
       resolve(file);
-    }, 'image/png', 0.9); // Use image/png or image/jpeg
+    }, 'image/png', 0.9);
   });
 }
 
 
 export default function ProfilePage() {
   const supabase = createClient();
-  const router = useRouter();
+  const router = useRouter(); // Initialize the router
   
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -89,17 +87,18 @@ export default function ProfilePage() {
 
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
-  const [avatarUrl, setAvatarUrl] = useState(''); // Stores the DB/public URL of the avatar
+  const [avatarUrl, setAvatarUrl] = useState('');
   
-  const [imgSrcToCrop, setImgSrcToCrop] = useState(''); // Data URL of the image selected by user for cropping
+  const [imgSrcToCrop, setImgSrcToCrop] = useState('');
   const [crop, setCrop] = useState(); 
-  const [completedCrop, setCompletedCrop] = useState(null); // Stores PixelCrop data from onComplete
-  const imgRef = useRef(null); // Ref for the image displayed in the cropper
+  const [completedCrop, setCompletedCrop] = useState(null);
+  const imgRef = useRef(null);
   const [showCropperModal, setShowCropperModal] = useState(false);
   const aspect = 1 / 1;
 
-  const [newAvatarFile, setNewAvatarFile] = useState(null); // This will store the cropped File/Blob
-  const [formAvatarPreview, setFormAvatarPreview] = useState(null); // For displaying preview in edit form
+  const [newAvatarFile, setNewAvatarFile] = useState(null);
+  const [formAvatarPreview, setFormAvatarPreview] = useState(null);
+
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -143,7 +142,7 @@ export default function ProfilePage() {
       const { width, height } = e.currentTarget;
       const initialCrop = centerAspectCrop(width, height, aspect);
       setCrop(initialCrop);
-      setCompletedCrop(initialCrop); // Initialize completedCrop as well
+      setCompletedCrop(initialCrop); 
     }
   }
 
@@ -153,17 +152,15 @@ export default function ProfilePage() {
       return;
     }
     try {
-      const originalFile = imgSrcToCrop; // This is a data URL
       // Attempt to get a filename, fallback to a generic one
-      // This is a bit tricky as data URLs don't have filenames.
-      // If you store the original file object, you can use its name.
-      const fileName = newAvatarFile?.name || 'avatar.png';
+      // We don't have the original file object directly here, so make a generic name.
+      const fileName = 'avatar_crop.png'; 
 
       const croppedImageBlob = await getCroppedImg(imgRef.current, completedCrop, fileName);
-      setNewAvatarFile(croppedImageBlob); // This is the File/Blob to upload
-      setFormAvatarPreview(URL.createObjectURL(croppedImageBlob)); // Update preview with cropped image
+      setNewAvatarFile(croppedImageBlob); 
+      setFormAvatarPreview(URL.createObjectURL(croppedImageBlob)); 
       setShowCropperModal(false);
-      setImgSrcToCrop(''); // Clear the source for cropper
+      setImgSrcToCrop(''); 
     } catch (e) {
       console.error("Error cropping image:", e);
       setFormMessage("Error: Could not crop image. Please try again.");
@@ -175,16 +172,28 @@ export default function ProfilePage() {
     setImgSrcToCrop('');
   };
 
-  const handleCancelEdit = () => { /* ... unchanged from previous working version ... */ };
+  const handleCancelEdit = () => {
+    if (initialProfileData) {
+      setUsername(initialProfileData.username || '');
+      setFullName(initialProfileData.full_name || '');
+      setFormAvatarPreview(initialProfileData.avatar_url || null); 
+    } else {
+      setUsername(''); setFullName(''); setFormAvatarPreview(null);
+    }
+    setImgSrcToCrop(''); 
+    setNewAvatarFile(null); 
+    setIsEditing(false);
+    setFormMessage('');
+  };
 
   const handleProfileUpdate = async (event) => {
     event.preventDefault();
     if (!user) { setFormMessage('Error: User not found.'); return; }
     setIsSaving(true); setFormMessage('');
 
-    let newPublicAvatarUrl = avatarUrl; // Start with existing or previously set URL
+    let newPublicAvatarUrl = avatarUrl; 
 
-    if (newAvatarFile) { // If a new (cropped) file is staged for upload
+    if (newAvatarFile) { 
       const filePath = `${user.id}/${Date.now()}_${newAvatarFile.name}`; 
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('avatars')
@@ -202,7 +211,7 @@ export default function ProfilePage() {
     const formData = new FormData();
     formData.append('username', username);
     formData.append('full_name', fullName);
-    formData.append('avatar_url', newPublicAvatarUrl); // Send the final URL to server action
+    formData.append('avatar_url', newPublicAvatarUrl); 
     
     const result = await updateProfile(formData);
 
@@ -210,14 +219,13 @@ export default function ProfilePage() {
       setFormMessage(`Error: ${result.error}`);
     } else {
       setFormMessage('Profile updated successfully!');
-      // Update all relevant states with the new data from the server if needed,
-      // or rely on revalidatePath. For avatar, update immediately.
       setAvatarUrl(newPublicAvatarUrl); 
       setFormAvatarPreview(newPublicAvatarUrl);
       setInitialProfileData({ username, full_name: fullName, avatar_url: newPublicAvatarUrl });
       setProfile({ username, full_name: fullName, avatar_url: newPublicAvatarUrl });
-      setNewAvatarFile(null); // Clear the staged file
+      setNewAvatarFile(null); 
       setIsEditing(false); 
+      router.refresh(); // <<< --- THIS IS THE KEY ADDITION ---
     }
     setIsSaving(false);
   };
@@ -230,6 +238,7 @@ export default function ProfilePage() {
   return (
     <>
       {showCropperModal && imgSrcToCrop && (
+        // ... Cropper Modal JSX (ensure this is complete from previous version) ...
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-800 p-4 sm:p-6 rounded-lg shadow-xl max-w-md w-full">
             <h3 className="text-lg font-semibold text-white mb-4">Crop Your Avatar</h3>
@@ -237,7 +246,7 @@ export default function ProfilePage() {
               <ReactCrop
                 crop={crop}
                 onChange={(_, percentCrop) => setCrop(percentCrop)}
-                onComplete={(c) => setCompletedCrop(c)} // Capture pixel crop data
+                onComplete={(c) => setCompletedCrop(c)}
                 aspect={aspect}
                 minWidth={100} minHeight={100}
                 circularCrop={true}
@@ -247,7 +256,7 @@ export default function ProfilePage() {
                   ref={imgRef}
                   alt="Crop me"
                   src={imgSrcToCrop}
-                  onLoad={onImageLoadInCropper} // Renamed to avoid conflict
+                  onLoad={onImageLoadInCropper}
                   style={{ display: 'block', maxWidth: '100%', maxHeight: '45vh', objectFit: 'contain' }}
                 />
               </ReactCrop>
@@ -263,8 +272,7 @@ export default function ProfilePage() {
       <div className="min-h-screen bg-gray-900 text-white pt-20 sm:pt-24 pb-10 px-4">
         <div className="max-w-md mx-auto">
           <div className="bg-gray-800 p-6 sm:p-8 rounded-2xl shadow-2xl">
-            {/* ... View/Edit Mode Toggle and Display Logic ... */}
-            {/* Ensure this section uses displayAvatarInViewMode, profile?.full_name etc. */}
+            {/* ... View/Edit Mode Toggle and Display Logic (ensure this is complete from previous version) ... */}
             <div className="flex justify-between items-center mb-6">
               <h1 className="text-2xl sm:text-3xl font-bold text-white">
                 {isEditing ? 'Edit Profile' : 'My Profile'}
@@ -285,7 +293,7 @@ export default function ProfilePage() {
             {formMessage && !isEditing && <p className={`mb-4 text-center text-sm ${formMessage.startsWith('Error:') ? 'text-red-400' : 'text-green-400'}`}>{formMessage}</p>}
 
             {!isEditing ? (
-              // VIEW MODE (ensure this part is complete from previous version)
+              // VIEW MODE
               <div className="space-y-6 text-center">
                 <div className="relative w-32 h-32 sm:w-40 sm:h-40 mx-auto">
                   {displayAvatarInViewMode ? (
@@ -301,7 +309,7 @@ export default function ProfilePage() {
                 </div>
               </div>
             ) : (
-              // EDIT MODE FORM (ensure this part is complete from previous version)
+              // EDIT MODE FORM
               <form onSubmit={handleProfileUpdate} className="space-y-5">
                 <div className="text-center mb-6">
                   {formAvatarPreview ? 
