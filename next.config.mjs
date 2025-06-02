@@ -2,20 +2,20 @@
 const nextConfig = {
   images: {
     remotePatterns: [
+      // If you have other external image sources, keep their patterns here
+      // For example, if you had 'example.com':
+      // {
+      //   protocol: 'https',
+      //   hostname: 'example.com',
+      // },
+
+      // ** THIS IS THE IMPORTANT PART FOR YOUR SUPABASE AVATARS **
       {
         protocol: 'https',
-        hostname: 'example.com', // Keep this if you had it for other images
-        // pathname: '/**', // Optional: if you want to restrict paths
+        hostname: 'lekmaawuvlkbvwmabrxk.supabase.co', // Your specific Supabase project hostname
+        // You can optionally add a pathname if all your images are in a specific path:
+        // pathname: '/storage/v1/object/public/avatars/**', 
       },
-      // ** ADD THIS SECTION FOR SUPABASE STORAGE **
-      {
-        protocol: 'https',
-        // Replace <YOUR_PROJECT_REF> with your actual Supabase project reference ID
-        // You can find this in your Supabase project URL (e.g., abcdefghijklmnop.supabase.co)
-        hostname: '<YOUR_PROJECT_REF>.supabase.co', 
-        // pathname: '/storage/v1/object/public/avatars/**', // Optional: Be more specific
-      },
-      // Add more patterns if avatars can come from other external domains
     ],
   },
 };
