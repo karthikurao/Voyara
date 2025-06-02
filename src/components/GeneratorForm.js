@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import ItineraryCard from './ItineraryCard';
-import { Clipboard, Save, CheckCircle } from 'lucide-react';
+import { Clipboard, Save, CheckCircle, HelpCircle } from 'lucide-react';
 
 // Full SkeletonLoader Component
 const SkeletonLoader = () => (
@@ -28,13 +28,14 @@ const SkeletonLoader = () => (
 
 export default function GeneratorForm({ user }) {
   const [destination, setDestination] = useState('');
-  const [numDays, setNumDays] = useState("2"); // Stores as string for input flexibility
+  const [sourceCity, setSourceCity] = useState(''); 
+  const [numDays, setNumDays] = useState("2"); 
   const [vibes, setVibes] = useState([]);
   const [transportMode, setTransportMode] = useState('Any');
   const [travelPeriod, setTravelPeriod] = useState('Any');
 
   const [loading, setLoading] = useState(false);
-  const [finalItinerary, setFinalItinerary] = useState(null);
+  const [finalItinerary, setFinalItinerary] = useState(null); 
   const [error, setError] = useState('');
   const [saveStatus, setSaveStatus] = useState('idle'); 
 
@@ -100,6 +101,7 @@ export default function GeneratorForm({ user }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
             destination, 
+            sourceCity,
             vibes, 
             numDays: daysToSubmit,
             transportMode, 
@@ -162,8 +164,8 @@ export default function GeneratorForm({ user }) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          destination: destination,
-          itinerary_data: finalItinerary
+          destination: destination, 
+          itinerary_data: finalItinerary 
         }),
       });
 
@@ -213,12 +215,20 @@ export default function GeneratorForm({ user }) {
         className="bg-white/10 backdrop-blur-md p-8 rounded-2xl shadow-lg border border-white/20 w-full max-w-xl"
       >
         <div className="space-y-6">
-          {/* Destination and Days Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="sm:col-span-2">
-              <label htmlFor="destination" className="block text-sm font-medium text-gray-200 mb-1">Destination</label>
+          {/* Destination, Source City Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="destination" className="block text-sm font-medium text-gray-200 mb-1">Destination City</label>
               <input type="text" id="destination" value={destination} onChange={(e) => setDestination(e.target.value)} placeholder="e.g., Mysuru, Goa" className="w-full bg-white/10 text-white p-3 rounded-lg border border-white/20 focus:ring-2 focus:ring-purple-500 outline-none" required />
             </div>
+            <div>
+              <label htmlFor="sourceCity" className="block text-sm font-medium text-gray-200 mb-1">Source City (Optional)</label>
+              <input type="text" id="sourceCity" value={sourceCity} onChange={(e) => setSourceCity(e.target.value)} placeholder="e.g., Bengaluru" className="w-full bg-white/10 text-white p-3 rounded-lg border border-white/20 focus:ring-2 focus:ring-purple-500 outline-none" />
+            </div>
+          </div>
+          
+          {/* Days, Transport and Period Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label htmlFor="numDays" className="block text-sm font-medium text-gray-200 mb-1">Days</label>
               <input 
@@ -234,10 +244,6 @@ export default function GeneratorForm({ user }) {
                 required 
               />
             </div>
-          </div>
-
-          {/* Transport and Period Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label htmlFor="transportMode" className="block text-sm font-medium text-gray-200 mb-1">Transport Mode</label>
               <select id="transportMode" value={transportMode} onChange={(e) => setTransportMode(e.target.value)} className="w-full bg-gray-700 text-white p-3 rounded-lg border border-white/20 focus:ring-2 focus:ring-purple-500 outline-none appearance-none">
@@ -265,6 +271,7 @@ export default function GeneratorForm({ user }) {
             </div>
           </div>
 
+          {/* Submit Button */}
           <button type="submit" disabled={loading} className="w-full bg-purple-600 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
             {loading ? 'Generating...' : 'Generate My Itinerary'}
           </button>
@@ -277,7 +284,7 @@ export default function GeneratorForm({ user }) {
         
         {loading && <SkeletonLoader />}
 
-        {!loading && finalItinerary && (
+        {!loading && finalItinerary && finalItinerary.itinerary && (
           <div className="relative">
             {user && (
               <>
@@ -295,6 +302,18 @@ export default function GeneratorForm({ user }) {
               finalItinerary.itinerary.map((dayData, index) => (
                 <ItineraryCard key={index} dayData={dayData} />
             ))}
+          </div>
+        )}
+
+        {/* Display Best Time to Visit */}
+        {!loading && finalItinerary && finalItinerary.bestTimeToVisit && (
+          <div className="mt-8 bg-white/5 p-6 rounded-lg">
+            <div className="flex items-center gap-2 mb-2">
+              <HelpCircle className="w-6 h-6 text-purple-400" />
+              <h3 className="text-xl font-semibold text-white">Best Time to Visit {destination}</h3>
+            </div>
+            <p className="text-gray-300"><strong className="text-gray-100">Suggested Period:</strong> {finalItinerary.bestTimeToVisit.months}</p>
+            <p className="text-gray-300"><strong className="text-gray-100">Reason:</strong> {finalItinerary.bestTimeToVisit.reason}</p>
           </div>
         )}
       </div>
