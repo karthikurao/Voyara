@@ -57,7 +57,7 @@ export default async function MyTripsPage() {
           </div>
         ) : (
           <div className="text-center py-10 bg-gray-800 rounded-lg">
-            <p className="text-xl text-gray-400">You haven't saved any trips yet.</p>
+            <p className="text-xl text-gray-400">You haven&apos;t saved any trips yet.</p>
             <Link href="/" className="mt-4 inline-block bg-purple-600 text-white font-semibold py-2 px-6 rounded-lg hover:bg-purple-700 transition-colors">
               Plan Your First Trip!
             </Link>

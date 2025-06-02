@@ -32,7 +32,7 @@ export default async function SharePage({ params }) {
       <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4">
         <h1 className="text-4xl font-bold mb-4">Trip Not Found</h1>
         <p className="text-xl text-gray-400 mb-8">
-          Sorry, we couldn't find the itinerary you were looking for.
+          Sorry, we couldn&apos;t find the itinerary you were looking for.
         </p>
         <Link href="/" className="bg-purple-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-purple-700 transition-colors">
           Plan a New Trip

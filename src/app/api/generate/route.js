@@ -23,31 +23,84 @@ function AIStream(stream) {
 
 export async function POST(req) {
   try {
-    const { destination, vibes, numDays } = await req.json();
-    const days = Math.max(1, Math.min(10, numDays || 2));
+    const { destination, vibes, numDays, transportMode, travelPeriod } = await req.json();
+    
+    // console.log("API Received Inputs:", { destination, vibes, numDays, transportMode, travelPeriod }); 
 
-    // ** PROMPT UPDATED FOR SPECIFIC TIMES **
+    const days = Math.max(1, Math.min(10, numDays || 2)); 
+
+    let transportPreamble = "";
+    let transportExclusion = "";
+
+    if (transportMode && transportMode !== "Any") {
+        transportPreamble = `The user's EXCLUSIVE mode of transport for reaching the destination and for all significant travel during the trip is **${transportMode}**. All travel logistics, arrival/departure plans, activity accessibility, and inter-activity travel suggestions MUST be based SOLELY on using ${transportMode}.`;
+        if (transportMode === "Car") {
+            transportPreamble += " Focus on driving routes, estimated driving times between locations, parking availability, and car-accessible locations. Assume the user has their own or a rental car for the entire duration.";
+            transportExclusion = "ABSOLUTELY NO FLIGHTS, AIRPORTS, OR AIR TRAVEL should be mentioned, planned for, or assumed for any part of this itinerary, including arrival at the destination.";
+        } else if (transportMode === "Train") {
+            transportPreamble += " Focus on train routes, travel to/from central train stations, and activities accessible from there using local transport (like taxis or local buses, specify if needed). Assume arrival/departure at the destination by train.";
+            transportExclusion = "ABSOLUTELY NO FLIGHTS, AIRPORTS, OR AIR TRAVEL should be mentioned, planned for, or assumed for any part of this itinerary, including arrival at the destination.";
+        } else if (transportMode === "Bus") {
+            transportPreamble += " Focus on inter-city bus routes, travel to/from bus terminals, and activities accessible from there. Assume arrival/departure at the destination by bus.";
+            transportExclusion = "ABSOLUTELY NO FLIGHTS, AIRPORTS, OR AIR TRAVEL should be mentioned, planned for, or assumed for any part of this itinerary, including arrival at the destination.";
+        } else if (transportMode === "Airways") {
+            // If Airways IS selected, then airport context is fine.
+            transportPreamble += " Assume the user will primarily arrive and depart via AIRPORT for the main destination. Include reasonable travel to/from the airport. Local transport within the destination can then be varied (taxi, local bus, rental car as appropriate and suggest these).";
+        }
+    }
+
+    let periodInstruction = "";
+    if (travelPeriod && travelPeriod !== "Any") {
+        periodInstruction = `The trip is planned for **${travelPeriod}**. All suggested activities, their feasibility, opening hours, and alternative suggestions MUST be suitable and relevant for this specific month or season, explicitly considering typical weather, local events, or peak/off-peak conditions. Descriptions should reflect this.`;
+    }
+
     const prompt = `
-      You are Voyara, an expert travel planner creating a JSON itinerary. Be specific with timings for each activity to create a realistic schedule.
-      Do not include any introductory text, just the JSON object.
-      The destination is ${destination}.
-      The desired vibe is: ${vibes.join(", ")}.
-      
-      Generate a detailed itinerary for a trip lasting exactly ${days} days.
-      The JSON structure must have a root key "itinerary" which is an array of day objects.
-      Each day object in the array must contain:
-      1. A "day" key with the string value (e.g., "Day 1", "Day 2").
-      2. A "timeline" key which is an array of objects, where each object represents an activity and must contain:
-          - "time": a specific time string (e.g., "9:00 AM", "1:30 PM", "7:00 PM"),
-          - "activity": a string for the activity name,
-          - "description": a string for the 1-2 sentence description.
-      3. A "food_suggestion" key which is an object containing "name" (string) and "description" (string).
+You are Voyara, an extremely detailed and highly obedient AI travel planner. You MUST create a JSON itinerary. Adherence to ALL user constraints below is MANDATORY and CRITICAL.
 
-      Ensure the "itinerary" array has exactly ${days} elements.
+**User's Non-Negotiable Constraints:**
+- Destination: ${destination}
+- Desired Vibe: ${vibes.join(", ")}
+- Trip Duration: Exactly ${days} days.
+${transportPreamble ? `- Transport Mode Constraint: ${transportPreamble}` : '- Transport Mode: Not specified; assume general multi-modal accessibility for arrival but prioritize local transport for activities.'}
+${transportExclusion ? `- Explicit Transport Exclusion: ${transportExclusion}` : ''}
+${periodInstruction ? `- Travel Period Constraint: ${periodInstruction}` : ''}
+
+**Task & Output Instructions:**
+Generate a detailed itinerary based *strictly and exclusively* on ALL the user's constraints above.
+The itinerary must feature specific timings (e.g., "9:00 AM", "1:30 PM") for each activity.
+Output ONLY the JSON object. Do not include any introductory or concluding text, comments, or markdown formatting outside the JSON structure.
+
+**Required JSON Structure:**
+{
+  "itinerary": [ 
+    // Array of day objects. There MUST be exactly ${days} day objects.
+    {
+      "day": "Day X", // e.g., "Day 1", "Day 2"
+      "timeline": [ 
+        // Array of activity objects for this day
+        {
+          "time": "HH:MM AM/PM", // e.g., "9:30 AM"
+          "activity": "Name of the activity",
+          "description": "1-3 sentences. This description MUST incorporate and reflect how the specified Transport Mode and Travel Period constraints influence this activity or its logistics, IF those constraints were provided. For example, if by Car, mention parking or scenic drive. If Winter, mention appropriate attire or alternatives for bad weather."
+        }
+        // ... more activities for this day
+      ],
+      "food_suggestion": {
+        "name": "Restaurant Name or Type of Cuisine",
+        "description": "1-2 sentences. This description should also consider the Travel Period if specified."
+      }
+    }
+    // ... more day objects if numDays > 1
+  ]
+}
+
+**Critical Reminders:**
+- If a non-'Airways' transport mode is specified, the ENTIRE itinerary, including arrival at the destination, must be planned without any flights or airport mentions.
+- All activity and food descriptions must align with the specified Vibe, Transport Mode, and Travel Period.
+- The "itinerary" array must contain exactly ${days} day objects.
     `;
 
     const result = await model.generateContentStream(prompt);
-    
     const stream = AIStream(result.stream);
     return new Response(stream);
 
