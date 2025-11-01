@@ -1,14 +1,12 @@
 import Header from "@/components/Header";
 import GeneratorForm from "@/components/GeneratorForm";
-import { createClient } from '@/utils/supabase/server'; // New import
 
 export const dynamic = 'force-dynamic';
 
 export default async function Home() {
-  const supabase = createClient(); // New client creation
+  // Authentication is handled client-side using JWT tokens issued by Voyara
+  // No server-side user check needed for the home page
   
-  const { data: { user } } = await supabase.auth.getUser();
-
   return (
     <>
       <Header />
@@ -23,7 +21,7 @@ export default async function Home() {
         </div>
 
         <div className="mt-12 w-full">
-          <GeneratorForm user={user} />
+          <GeneratorForm />
         </div>
         
       </main>

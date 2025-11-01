@@ -1,0 +1,62 @@
+import { NextResponse } from 'next/server';
+import { SignJWT } from 'jose';
+import { verifyStackAuthJWT } from '@/lib/auth';
+import { neonQuery } from '@/lib/db';
+import { ensureCoreSchema } from '@/lib/schema';
+
+export const dynamic = 'force-dynamic';
+
+export async function POST(req) {
+  try {
+    const origin = req.headers.get('origin') || '';
+    const host = req.headers.get('host') || '';
+    if (origin && !origin.includes(host)) {
+      return NextResponse.json({ error: 'Invalid origin' }, { status: 403 });
+    }
+
+  // Verify user authentication via Voyara JWT
+    const authHeader = req.headers.get('authorization') || '';
+    const jwt = authHeader.replace(/^Bearer /i, '');
+    const user = await verifyStackAuthJWT(jwt);
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    // Simple per-user rate limit (30 req / 10 min)
+    const key = `share:${user.sub}`;
+    globalThis.__shareRate = globalThis.__shareRate || new Map();
+    const rec = globalThis.__shareRate.get(key) || { count: 0, ts: Date.now() };
+    const WINDOW = 10 * 60 * 1000; // 10 min
+    const LIMIT = 30;
+    const now = Date.now();
+    if (now - rec.ts > WINDOW) { rec.count = 0; rec.ts = now; }
+    rec.count++;
+    globalThis.__shareRate.set(key, rec);
+    if (rec.count > LIMIT) {
+      return NextResponse.json({ error: 'Too many share links created. Please try later.' }, { status: 429 });
+    }
+
+    const { itineraryId } = await req.json();
+    if (!itineraryId) return NextResponse.json({ error: 'Missing itineraryId' }, { status: 400 });
+
+    // Ensure the itinerary belongs to the requesting user
+  await ensureCoreSchema();
+  const checkRes = await neonQuery('SELECT id, user_id FROM itineraries WHERE id = $1', [itineraryId]);
+    const trip = checkRes[0];
+    if (!trip || trip.user_id !== user.sub) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
+
+    const secret = process.env.SHARE_TOKEN_SECRET;
+    if (!secret) return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 });
+
+    const token = await new SignJWT({ it: itineraryId })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setIssuedAt()
+      .setExpirationTime('30d')
+      .sign(new TextEncoder().encode(secret));
+
+    return NextResponse.json({ token });
+  } catch (e) {
+    console.error('Error signing share token:', e);
+    return NextResponse.json({ error: 'Failed to create share token' }, { status: 500 });
+  }
+}

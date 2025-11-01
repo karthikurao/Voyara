@@ -1,35 +1,44 @@
-import { createClient } from '@/utils/supabase/server';
-import { redirect } from 'next/navigation';
+
+"use client";
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import SavedItineraryList from '@/components/SavedItineraryList'; // Import the new client component
+import SavedItineraryList from '@/components/SavedItineraryList';
 
-export const dynamic = 'force-dynamic'; 
+export default function MyTripsPage() {
+  const [savedItineraries, setSavedItineraries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-export default async function MyTripsPage() {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const fetchTrips = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+  const jwt = window.localStorage.getItem('voyaraAuthToken');
+      if (!jwt) {
+        setError('Please log in to view saved trips.');
+        setSavedItineraries([]);
+        setLoading(false);
+        return;
+      }
+      const res = await fetch('/api/itineraries/list', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${jwt}`,
+        },
+      });
+      if (!res.ok) throw new Error((await res.json())?.error || 'Failed to fetch trips');
+      const data = await res.json();
+      setSavedItineraries(data.itineraries || []);
+    } catch (err) {
+      setError(err.message);
+      setSavedItineraries([]);
+    }
+    setLoading(false);
+  };
 
-  if (!user) {
-    redirect('/login'); 
-  }
-
-  const { data: savedItineraries, error } = await supabase
-    .from('itineraries')
-    .select('*') 
-    .eq('user_id', user.id) 
-    .order('created_at', { ascending: false }); 
-
-  if (error) {
-    console.error('Error fetching saved itineraries:', error);
-    // You could return a more user-friendly error message component here
-    return (
-        <div className="min-h-screen bg-gray-900 text-white pt-24 pb-10 px-4">
-            <div className="max-w-3xl mx-auto text-center">
-                <p className="text-red-400">Could not load your saved trips. Please try again later.</p>
-            </div>
-        </div>
-    );
-  }
+  useEffect(() => {
+    fetchTrips();
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-900 text-white pt-24 pb-10 px-4">
@@ -41,9 +50,21 @@ export default async function MyTripsPage() {
           </Link>
         </div>
 
-        {savedItineraries && savedItineraries.length > 0 ? (
-          // Use the new SavedItineraryList component to render the trips
-          <SavedItineraryList savedItineraries={savedItineraries} />
+        {loading ? (
+          <div className="text-center py-10 bg-gray-800 rounded-lg shadow-lg">
+            <p className="text-xl text-gray-400">Loading your trips...</p>
+          </div>
+        ) : error ? (
+          <div className="text-center py-10 bg-gray-800 rounded-lg shadow-lg">
+            <p className="text-xl text-red-400">Could not load your saved trips. {error}</p>
+            {error.includes('log in') && (
+              <Link href="/login" className="mt-4 inline-block bg-purple-600 text-white font-semibold py-2 px-6 rounded-lg hover:bg-purple-700 transition-colors">
+                Log In
+              </Link>
+            )}
+          </div>
+        ) : savedItineraries.length > 0 ? (
+          <SavedItineraryList savedItineraries={savedItineraries} onReload={fetchTrips} />
         ) : (
           <div className="text-center py-10 bg-gray-800 rounded-lg shadow-lg">
             <p className="text-xl text-gray-400">You haven&apos;t saved any trips yet.</p>

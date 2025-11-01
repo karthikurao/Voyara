@@ -1,30 +1,38 @@
-import { createClient } from '@/utils/supabase/server';
 import ItineraryCard from '@/components/ItineraryCard';
 import Link from 'next/link';
-import { notFound } from 'next/navigation'; // For handling cases where the ID doesn't exist
+import { notFound } from 'next/navigation';
+import { jwtVerify } from 'jose';
+import { neonQuery } from '../../../lib/db';
 
 export const dynamic = 'force-dynamic';
 
 async function getItineraryById(id) {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from('itineraries')
-    .select('*')
-    .eq('id', id) // Fetch by the specific itinerary ID
-    .single(); // We expect only one result
-
-  if (error && error.code !== 'PGRST116') { // PGRST116 means "single row not found", which is okay
+  try {
+    const result = await neonQuery({
+      sql: 'SELECT * FROM itineraries WHERE id = $1',
+      params: [id],
+      method: 'GET',
+    });
+    return result[0] || null;
+  } catch (error) {
     console.error('Error fetching itinerary:', error);
     return null;
   }
-  if (!data) {
-    return null;
-  }
-  return data;
 }
 
-export default async function SharePage({ params }) {
+export default async function SharePage({ params, searchParams }) {
   const itineraryId = params.itineraryId;
+  const token = searchParams?.t;
+  // Validate share token before exposing content
+  try {
+    if (!token) return notFound();
+    const secret = process.env.SHARE_TOKEN_SECRET;
+    if (!secret) return notFound();
+    const { payload } = await jwtVerify(token, new TextEncoder().encode(secret));
+    if (!payload || String(payload.it) !== String(itineraryId)) return notFound();
+  } catch {
+    return notFound();
+  }
   const trip = await getItineraryById(itineraryId);
 
   if (!trip) {

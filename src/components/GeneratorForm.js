@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import ItineraryCard from './ItineraryCard';
-import { Clipboard, Save, CheckCircle, HelpCircle } from 'lucide-react';
+import { Clipboard, Save, CheckCircle, HelpCircle, Download, Wand2 } from 'lucide-react';
 
 // Full SkeletonLoader Component
 const SkeletonLoader = () => (
@@ -26,13 +26,14 @@ const SkeletonLoader = () => (
   </div>
 );
 
-export default function GeneratorForm({ user }) {
+export default function GeneratorForm() {
   const [destination, setDestination] = useState('');
   const [sourceCity, setSourceCity] = useState(''); 
   const [numDays, setNumDays] = useState("2"); 
   const [vibes, setVibes] = useState([]);
   const [transportMode, setTransportMode] = useState('Any');
   const [travelPeriod, setTravelPeriod] = useState('Any');
+  const [refineText, setRefineText] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [finalItinerary, setFinalItinerary] = useState(null); 
@@ -71,24 +72,7 @@ export default function GeneratorForm({ user }) {
     setNumDays(String(numericValue)); 
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (vibes.length === 0) {
-      setError("Please select at least one vibe.");
-      return;
-    }
-
-    let daysToSubmit = parseInt(numDays, 10);
-    if (isNaN(daysToSubmit) || daysToSubmit < 1) {
-      daysToSubmit = 2; 
-      setNumDays("2"); 
-    } else {
-      daysToSubmit = Math.min(daysToSubmit, 10); 
-      if (String(daysToSubmit) !== numDays) { 
-        setNumDays(String(daysToSubmit));
-      }
-    }
-
+  const doGenerate = async (payload) => {
     setLoading(true);
     setFinalItinerary(null);
     setSaveStatus('idle');
@@ -99,14 +83,7 @@ export default function GeneratorForm({ user }) {
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-            destination, 
-            sourceCity,
-            vibes, 
-            numDays: daysToSubmit,
-            transportMode, 
-            travelPeriod 
-        }), 
+        body: JSON.stringify(payload), 
       });
 
       if (!response.ok) {
@@ -134,6 +111,34 @@ export default function GeneratorForm({ user }) {
       setLoading(false);
     }
   };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (vibes.length === 0) {
+      setError("Please select at least one vibe.");
+      return;
+    }
+
+    let daysToSubmit = parseInt(numDays, 10);
+    if (isNaN(daysToSubmit) || daysToSubmit < 1) {
+      daysToSubmit = 2; 
+      setNumDays("2"); 
+    } else {
+      daysToSubmit = Math.min(daysToSubmit, 10); 
+      if (String(daysToSubmit) !== numDays) { 
+        setNumDays(String(daysToSubmit));
+      }
+    }
+
+    await doGenerate({ 
+      destination, 
+      sourceCity,
+      vibes, 
+      numDays: daysToSubmit,
+      transportMode, 
+      travelPeriod 
+    });
+  };
   
   const handleCopyToClipboard = () => {
     if (finalItinerary && finalItinerary.itinerary) {
@@ -157,12 +162,23 @@ export default function GeneratorForm({ user }) {
   };
   
   const handleSaveItinerary = async () => {
-    if (!finalItinerary || !user) return;
+    if (!finalItinerary) return;
+    
+    // Get JWT from localStorage
+  const jwt = typeof window !== 'undefined' ? localStorage.getItem('voyaraAuthToken') : null;
+    if (!jwt) {
+      alert('Please log in to save itineraries.');
+      return;
+    }
+    
     setSaveStatus('saving');
     try {
       const response = await fetch('/api/itineraries/save', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${jwt}`
+        },
         body: JSON.stringify({
           destination: destination, 
           itinerary_data: finalItinerary 
@@ -185,27 +201,102 @@ export default function GeneratorForm({ user }) {
   const SaveButton = () => {
     if (saveStatus === 'saving') {
       return (
-        <button disabled className="absolute top-4 right-16 flex items-center gap-2 bg-white/10 p-2 rounded-lg cursor-not-allowed text-sm">
-          <Save className="w-4 h-4 animate-spin" /> Saving...
+        <button disabled className="flex items-center gap-2 bg-white/10 p-2 rounded-lg cursor-not-allowed text-sm px-4 py-2">
+          <Save className="w-4 h-4 animate-spin" /> 
+          <span>Saving...</span>
         </button>
       );
     }
     if (saveStatus === 'saved') {
       return (
-        <button disabled className="absolute top-4 right-16 flex items-center gap-2 bg-green-500/20 text-green-400 p-2 rounded-lg text-sm">
-          <CheckCircle className="w-4 h-4" /> Saved
+        <button disabled className="flex items-center gap-2 bg-green-500/20 text-green-400 p-2 rounded-lg text-sm px-4 py-2">
+          <CheckCircle className="w-4 h-4" /> 
+          <span>Saved</span>
         </button>
       );
     }
     return (
       <button 
         onClick={handleSaveItinerary}
-        className="absolute top-4 right-16 bg-white/10 p-2 rounded-lg hover:bg-white/20"
+        className="bg-white/10 p-2 rounded-lg hover:bg-white/20 flex items-center gap-2 px-4 py-2"
         title="Save Itinerary"
       >
         <Save className="w-5 h-5" />
+        <span className="text-sm">Save</span>
       </button>
     );
+  };
+
+  const handleRefine = async () => {
+    if (!finalItinerary || !refineText.trim()) return;
+    await doGenerate({
+      destination,
+      sourceCity,
+      vibes,
+      numDays: parseInt(numDays, 10) || 2,
+      transportMode,
+      travelPeriod,
+      refine: { instructions: refineText.trim(), previous: finalItinerary }
+    });
+  };
+
+  // Build a very simple ICS export using current itinerary
+  const handleExportICS = () => {
+    if (!finalItinerary || !finalItinerary.itinerary) return;
+    const lines = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Voyara//Itinerary//EN',
+    ];
+    const startDate = new Date();
+    finalItinerary.itinerary.forEach((day, i) => {
+      const dayDate = new Date(startDate);
+      dayDate.setDate(startDate.getDate() + i);
+      const y = dayDate.getUTCFullYear();
+      const m = String(dayDate.getUTCMonth() + 1).padStart(2, '0');
+      const d = String(dayDate.getUTCDate()).padStart(2, '0');
+      (day.timeline || []).forEach((item) => {
+        // Try to parse time in HH:MM AM/PM
+        const match = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec(item.time || '');
+        let hh = 9, mm = 0; // default 9:00
+        if (match) {
+          hh = parseInt(match[1], 10);
+          mm = parseInt(match[2], 10);
+          const mer = match[3].toUpperCase();
+          if (mer === 'PM' && hh !== 12) hh += 12; if (mer === 'AM' && hh === 12) hh = 0;
+        }
+        const dtStart = `${y}${m}${d}T${String(hh).padStart(2,'0')}${String(mm).padStart(2,'0')}00Z`;
+        const uid = `${Date.now()}-${Math.random().toString(36).slice(2)}@voyara`; 
+        lines.push('BEGIN:VEVENT');
+        lines.push(`UID:${uid}`);
+        lines.push(`DTSTAMP:${y}${m}${d}T000000Z`);
+        lines.push(`DTSTART:${dtStart}`);
+        lines.push(`SUMMARY:${(item.activity || 'Activity').replace(/\n/g,' ')}`);
+        if (item.description) lines.push(`DESCRIPTION:${item.description.replace(/\n/g,' ')}`);
+        lines.push('END:VEVENT');
+      });
+    });
+    lines.push('END:VCALENDAR');
+    const blob = new Blob([lines.join('\r\n')], { type: 'text/calendar' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `voyara-${destination || 'trip'}.ics`;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadJSON = () => {
+    if (!finalItinerary) return;
+    const blob = new Blob([JSON.stringify(finalItinerary, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url; a.download = `voyara-${destination || 'itinerary'}.json`;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  };
+
+  const handlePrintPDF = () => {
+    // Let the user use browser's print to PDF; keep UI minimal by printing only the results area
+    window.print();
   };
 
   return (
@@ -286,18 +377,67 @@ export default function GeneratorForm({ user }) {
 
         {!loading && finalItinerary && finalItinerary.itinerary && (
           <div className="relative">
-            {user && (
-              <>
-                <SaveButton />
+            {/* Save and Copy buttons - top right corner */}
+            <div className="flex gap-2 justify-end mb-4 print:hidden">
+              <SaveButton />
+              <button 
+                onClick={handleCopyToClipboard}
+                className="bg-white/10 p-2 rounded-lg hover:bg-white/20 flex items-center gap-2"
+                title="Copy to Clipboard"
+              >
+                <Clipboard className="w-5 h-5" />
+                <span className="text-sm">Copy</span>
+              </button>
+            </div>
+
+            {/* Export & Refine Row */}
+            <div className="flex flex-col gap-4 mb-6">
+              {/* Refine Input */}
+              <div className="w-full">
+                <label className="block text-sm text-gray-300 mb-2">Refine itinerary</label>
+                <div className="flex gap-2">
+                  <input 
+                    value={refineText} 
+                    onChange={(e)=>setRefineText(e.target.value)} 
+                    placeholder="e.g., add kid-friendly options"
+                    className="flex-1 bg-white/10 text-white p-3 rounded-lg border border-white/20 focus:ring-2 focus:ring-purple-500 outline-none text-sm" 
+                  />
+                  <button 
+                    onClick={handleRefine} 
+                    className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-3 rounded-lg flex items-center gap-2 whitespace-nowrap"
+                  >
+                    <Wand2 className="w-4 h-4"/>
+                    <span className="hidden sm:inline">Refine</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Export Buttons Row */}
+              <div className="flex flex-wrap gap-2 print:hidden">
                 <button 
-                  onClick={handleCopyToClipboard}
-                  className="absolute top-4 right-4 bg-white/10 p-2 rounded-lg hover:bg-white/20"
-                  title="Copy to Clipboard"
+                  onClick={handleExportICS} 
+                  className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm"
                 >
-                  <Clipboard className="w-5 h-5" />
+                  <Download className="w-4 h-4"/>
+                  <span>Export ICS</span>
                 </button>
-              </>
-            )}
+                <button 
+                  onClick={handleDownloadJSON} 
+                  className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm"
+                >
+                  <Download className="w-4 h-4"/>
+                  <span>Download JSON</span>
+                </button>
+                <button 
+                  onClick={handlePrintPDF} 
+                  className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm"
+                >
+                  <Download className="w-4 h-4"/>
+                  <span>Export PDF</span>
+                </button>
+              </div>
+            </div>
+
             {finalItinerary.itinerary && Array.isArray(finalItinerary.itinerary) &&
               finalItinerary.itinerary.map((dayData, index) => (
                 <ItineraryCard key={index} dayData={dayData} />

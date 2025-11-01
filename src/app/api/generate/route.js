@@ -1,11 +1,31 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { z } from 'zod';
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+
 const model = genAI.getGenerativeModel({ 
-  model: "gemini-1.5-flash-latest",
+  model: "gemini-2.0-flash-exp",
   generationConfig: {
-    responseMimeType: "application/json",
+    responseMimeType: "application/json"
   }
+});
+
+// Basic in-memory rate limit per IP (best-effort; for production, use a durable store)
+const bucket = new Map();
+const WINDOW_MS = 60_000; // 1 min
+const MAX_REQ = 5; // 5 requests/min per IP
+
+const RequestSchema = z.object({
+  destination: z.string().trim().min(1),
+  sourceCity: z.string().trim().optional().nullable(),
+  vibes: z.array(z.string()).min(1).max(10),
+  numDays: z.number().int().min(1).max(10).optional(),
+  transportMode: z.enum(["Any","Airways","Train","Bus","Car"]).optional(),
+  travelPeriod: z.string().trim().optional(),
+  refine: z.object({ // optional refine mode with instructions and existing JSON
+    instructions: z.string().trim().min(1),
+    previous: z.any().optional(),
+  }).optional(),
 });
 
 function AIStream(stream) {
@@ -23,9 +43,32 @@ function AIStream(stream) {
 
 export async function POST(req) {
   try {
-    const { destination, sourceCity, vibes, numDays, transportMode, travelPeriod } = await req.json();
+    // Enforce same-origin for browsers; allow SSR/local tools gracefully
+    const origin = req.headers.get('origin') || '';
+    const host = req.headers.get('host') || '';
+    if (origin && !origin.includes(host)) {
+      return new Response(JSON.stringify({ error: 'Invalid origin' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    // Minimal IP-based rate limit
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || req.headers.get('x-real-ip') || 'unknown';
+    const now = Date.now();
+    const rec = bucket.get(ip) || { count: 0, ts: now };
+    if (now - rec.ts > WINDOW_MS) { rec.count = 0; rec.ts = now; }
+    rec.count++;
+    bucket.set(ip, rec);
+    if (rec.count > MAX_REQ) {
+      return new Response(JSON.stringify({ error: 'Rate limit exceeded. Please try again in a minute.' }), { status: 429, headers: { 'Content-Type': 'application/json' } });
+    }
+
+    const body = await req.json();
+    const parsed = RequestSchema.safeParse(body);
+    if (!parsed.success) {
+      return new Response(JSON.stringify({ error: 'Invalid request', details: parsed.error.flatten() }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    }
+    const { destination, sourceCity, vibes, numDays, transportMode, travelPeriod, refine } = parsed.data;
     
-    const days = Math.max(1, Math.min(10, numDays || 2)); 
+    const days = Math.max(1, Math.min(10, numDays ?? 2)); 
 
     let sourceCityInstruction = "";
     if (sourceCity && sourceCity.trim() !== "") {
@@ -101,11 +144,12 @@ The itinerary must feature specific timings (e.g., "9:00 AM", "1:30 PM") for eac
 - All activity and food descriptions must align with the specified Vibe, Transport Mode, and Travel Period.
 - The "itinerary" array must contain exactly ${days} day objects.
 - The "bestTimeToVisit" object MUST be populated with relevant information for ${destination}.
+    ${refine ? `\nAdditional refinement instructions from the user: ${refine.instructions}\nIf a previous itinerary JSON is provided below, use it as a base and only modify relevant parts while keeping the same schema.\nPrevious JSON (may be empty):\n${refine.previous ? JSON.stringify(refine.previous).slice(0, 5000) : ''}` : ''}
     `;
 
     const result = await model.generateContentStream(prompt);
     const stream = AIStream(result.stream);
-    return new Response(stream);
+    return new Response(stream, { headers: { 'Content-Type': 'application/json' } });
 
   } catch (error) {
     console.error("Error in generate route:", error);

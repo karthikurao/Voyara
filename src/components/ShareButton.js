@@ -7,11 +7,29 @@ export default function ShareButton({ itineraryId, destination }) {
   const [copied, setCopied] = useState(false);
 
   const handleShare = () => {
-    const shareUrl = `${window.location.origin}/share/${itineraryId}`;
-    navigator.clipboard.writeText(shareUrl)
+    const token = window.localStorage.getItem('voyaraAuthToken');
+    if (!token) {
+      alert('Please log in to share itineraries.');
+      return;
+    }
+    // Request a signed token for public sharing
+    fetch('/api/share/sign', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ itineraryId })
+    })
+      .then(async (r) => {
+        if (!r.ok) throw new Error((await r.json())?.error || 'Failed to create share link');
+        const { token } = await r.json();
+        const shareUrl = `${window.location.origin}/share/${itineraryId}?t=${encodeURIComponent(token)}`;
+        return navigator.clipboard.writeText(shareUrl);
+      })
       .then(() => {
         setCopied(true);
-        setTimeout(() => setCopied(false), 2000); // Reset after 2 seconds
+        setTimeout(() => setCopied(false), 2000);
       })
       .catch(err => {
         console.error('Failed to copy itinerary link:', err);
