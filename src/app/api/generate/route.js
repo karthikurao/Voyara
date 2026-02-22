@@ -5,14 +5,19 @@ if (!process.env.GOOGLE_API_KEY) {
   console.warn('GOOGLE_API_KEY is not set. The /api/generate route will fail until it is configured.');
 }
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
-
-const model = genAI.getGenerativeModel({ 
-  model: "gemini-2.0-flash-exp",
-  generationConfig: {
-    responseMimeType: "application/json"
+let _model;
+function getModel() {
+  if (!_model) {
+    const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+    _model = genAI.getGenerativeModel({
+      model: "gemini-2.0-flash-exp",
+      generationConfig: {
+        responseMimeType: "application/json"
+      }
+    });
   }
-});
+  return _model;
+}
 
 // Basic in-memory rate limit per IP (best-effort; for production, use a durable store)
 const bucket = new Map();
@@ -155,7 +160,7 @@ The itinerary must feature specific timings (e.g., "9:00 AM", "1:30 PM") for eac
     ${refine ? `\nAdditional refinement instructions from the user: ${refine.instructions}\nIf a previous itinerary JSON is provided below, use it as a base and only modify relevant parts while keeping the same schema.\nPrevious JSON (may be empty):\n${refine.previous ? JSON.stringify(refine.previous).slice(0, 5000) : ''}` : ''}
     `;
 
-    const result = await model.generateContentStream(prompt);
+    const result = await getModel().generateContentStream(prompt);
     const stream = AIStream(result.stream);
     return new Response(stream, { headers: { 'Content-Type': 'application/json' } });
 
