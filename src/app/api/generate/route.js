@@ -1,6 +1,10 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { z } from 'zod';
 
+if (!process.env.GOOGLE_API_KEY) {
+  console.warn('GOOGLE_API_KEY is not set. The /api/generate route will fail until it is configured.');
+}
+
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
 const model = genAI.getGenerativeModel({ 
@@ -43,6 +47,10 @@ function AIStream(stream) {
 
 export async function POST(req) {
   try {
+    if (!process.env.GOOGLE_API_KEY) {
+      return new Response(JSON.stringify({ error: 'GOOGLE_API_KEY is not configured' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    }
+
     // Enforce same-origin for browsers; allow SSR/local tools gracefully
     const origin = req.headers.get('origin') || '';
     const host = req.headers.get('host') || '';
