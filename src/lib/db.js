@@ -90,111 +90,129 @@ async function handleShareOperation(operation, args) {
 // Legacy neonQuery wrapper for backward compatibility with existing code
 // This maps SQL-like calls to MongoDB operations
 export async function neonQuery(query, params = []) {
-  await connectDB();
+  try {
+    await connectDB();
 
-  if (typeof query === 'string') {
-    return await parseSQLAndExecute(query, params);
+    if (typeof query === 'string') {
+      return await parseSQLAndExecute(query, params);
+    }
+
+    throw new Error('Query object format not supported in MongoDB mode');
+  } catch (error) {
+    console.error('MongoDB query error:', { query, params, error });
+    throw error;
   }
-
-  throw new Error('Query object format not supported in MongoDB mode');
 }
 
 // Parse SQL and convert to MongoDB operations
 async function parseSQLAndExecute(sql, params) {
-  const upperSql = sql.toUpperCase().trim();
+  try {
+    const upperSql = sql.toUpperCase().trim();
 
-  // SELECT from users
-  if (upperSql.includes('FROM users WHERE email')) {
-    const email = params[0];
-    const user = await User.findOne({ email: email.toLowerCase() });
-    return user ? [{ id: user._id, email: user.email, password_hash: user.password_hash }] : [];
-  }
+    // Handle CREATE TABLE statements (no-op in MongoDB)
+    if (upperSql.includes('CREATE EXTENSION') || upperSql.includes('CREATE TABLE')) {
+      return [];
+    }
 
-  if (upperSql.includes('SELECT id, email, password_hash FROM users WHERE email')) {
-    const email = params[0];
-    const user = await User.findOne({ email: email.toLowerCase() });
-    return user ? [{ id: user._id, email: user.email, password_hash: user.password_hash }] : [];
-  }
+    // SELECT from users
+    if (upperSql.includes('FROM users WHERE email')) {
+      const email = params?.[0];
+      if (!email) return [];
+      const user = await User.findOne({ email: email.toLowerCase() });
+      return user ? [{ id: user._id, email: user.email, password_hash: user.password_hash }] : [];
+    }
 
-  // INSERT into users
-  if (upperSql.includes('INSERT INTO users')) {
-    const [email, passwordHash] = params;
-    const user = await User.create({ email: email.toLowerCase(), password_hash: passwordHash });
-    return { id: user._id, email: user.email };
-  }
+    if (upperSql.includes('SELECT id, email, password_hash FROM users WHERE email')) {
+      const email = params?.[0];
+      if (!email) return [];
+      const user = await User.findOne({ email: email.toLowerCase() });
+      return user ? [{ id: user._id, email: user.email, password_hash: user.password_hash }] : [];
+    }
 
-  // SELECT from itineraries
-  if (upperSql.includes('SELECT * FROM itineraries WHERE id')) {
-    const itinerary = await Itinerary.findById(params[0]);
-    return itinerary ? [itinerary.toObject()] : [];
-  }
+    // INSERT into users
+    if (upperSql.includes('INSERT INTO users')) {
+      const email = params?.[0];
+      const passwordHash = params?.[1];
+      if (!email || !passwordHash) return { id: null };
+      const user = await User.create({ email: email.toLowerCase(), password_hash: passwordHash });
+      return { id: user._id, email: user.email };
+    }
 
-  if (upperSql.includes('SELECT id, user_id FROM itineraries WHERE id')) {
-    const itinerary = await Itinerary.findById(params[0]);
-    return itinerary ? [{ id: itinerary._id, user_id: itinerary.user_id }] : [];
-  }
+    // SELECT from itineraries
+    if (upperSql.includes('SELECT * FROM itineraries WHERE id')) {
+      const itinerary = await Itinerary.findById(params?.[0]);
+      return itinerary ? [itinerary.toObject()] : [];
+    }
 
-  // INSERT into itineraries
-  if (upperSql.includes('INSERT INTO itineraries')) {
-    const obj = createObjectFromInsertParams(params);
-    const itinerary = await Itinerary.create(obj);
-    return { id: itinerary._id };
-  }
+    if (upperSql.includes('SELECT id, user_id FROM itineraries WHERE id')) {
+      const itinerary = await Itinerary.findById(params?.[0]);
+      return itinerary ? [{ id: itinerary._id, user_id: itinerary.user_id }] : [];
+    }
 
-  // UPDATE itineraries
-  if (upperSql.includes('UPDATE itineraries SET')) {
-    const itineraryId = params[params.length - 1];
-    const updateData = extractUpdateData(sql, params);
-    const updated = await Itinerary.findByIdAndUpdate(itineraryId, updateData, { new: true });
-    return updated ? [updated.toObject()] : [];
-  }
+    // INSERT into itineraries
+    if (upperSql.includes('INSERT INTO itineraries')) {
+      const obj = createObjectFromInsertParams(params);
+      if (!obj.user_id || !obj.destination) return { id: null };
+      const itinerary = await Itinerary.create(obj);
+      return { id: itinerary._id };
+    }
 
-  // DELETE from itineraries
-  if (upperSql.includes('DELETE FROM itineraries WHERE id')) {
-    await Itinerary.findByIdAndDelete(params[0]);
-    return { success: true };
-  }
+    // UPDATE itineraries
+    if (upperSql.includes('UPDATE itineraries SET')) {
+      const itineraryId = params?.[params.length - 1];
+      const updateData = extractUpdateData(sql, params);
+      const updated = await Itinerary.findByIdAndUpdate(itineraryId, updateData, { new: true });
+      return updated ? [updated.toObject()] : [];
+    }
 
-  // SELECT from shares
-  if (upperSql.includes('SELECT * FROM shares WHERE itinerary_id')) {
-    const shares = await Share.find({ itinerary_id: params[0] });
-    return shares.map(s => s.toObject());
-  }
+    // DELETE from itineraries
+    if (upperSql.includes('DELETE FROM itineraries WHERE id')) {
+      await Itinerary.findByIdAndDelete(params?.[0]);
+      return { success: true };
+    }
 
-  if (upperSql.includes('SELECT token FROM shares WHERE itinerary_id')) {
-    const shares = await Share.find({ itinerary_id: params[0], revoked: false });
-    return shares.map(s => ({ token: s.token }));
-  }
+    // SELECT from shares
+    if (upperSql.includes('SELECT * FROM shares WHERE itinerary_id')) {
+      const shares = await Share.find({ itinerary_id: params?.[0] });
+      return shares.map(s => s.toObject());
+    }
 
-  // INSERT into shares
-  if (upperSql.includes('INSERT INTO shares')) {
-    const obj = createObjectFromInsertParams(params);
-    const share = await Share.create(obj);
-    return { token: share.token };
-  }
+    if (upperSql.includes('SELECT token FROM shares WHERE itinerary_id')) {
+      const shares = await Share.find({ itinerary_id: params?.[0], revoked: false });
+      return shares.map(s => ({ token: s.token }));
+    }
 
-  // UPDATE shares (revoke)
-  if (upperSql.includes('UPDATE shares SET revoked')) {
-    const updated = await Share.findOneAndUpdate(
-      { token: params[0], user_id: params[1] },
-      { revoked: true },
-      { new: true }
-    );
+    // INSERT into shares
+    if (upperSql.includes('INSERT INTO shares')) {
+      const obj = createObjectFromInsertParams(params);
+      if (!obj.itinerary_id || !obj.user_id || !obj.token) return { token: null };
+      const share = await Share.create(obj);
+      return { token: share.token };
+    }
+
+    // UPDATE shares (revoke)
+    if (upperSql.includes('UPDATE shares SET revoked')) {
+      const updated = await Share.findOneAndUpdate(
+        { token: params?.[0], user_id: params?.[1] },
+        { revoked: true },
+        { new: true }
+      );
+      return [];
+    }
+
+    // SELECT from itineraries for list
+    if (upperSql.includes('SELECT * FROM itineraries WHERE user_id')) {
+      const itineraries = await Itinerary.find({ user_id: params?.[0] });
+      return itineraries.map(i => i.toObject());
+    }
+
+    // Default: log unknown query and return empty result
+    console.warn('Unknown SQL query pattern, returning empty result:', sql);
     return [];
+  } catch (error) {
+    console.error('Error parsing SQL query:', { sql, params, error: error.message });
+    throw error;
   }
-
-  // SELECT from itineraries for list
-  if (upperSql.includes('SELECT * FROM itineraries WHERE user_id')) {
-    const itineraries = await Itinerary.find({ user_id: params[0] });
-    return itineraries.map(i => i.toObject());
-  }
-
-  // Handle CREATE TABLE statements (no-op in MongoDB)
-  if (upperSql.includes('CREATE EXTENSION') || upperSql.includes('CREATE TABLE')) {
-    return [];
-  }
-
-  throw new Error(`Unsupported SQL query: ${sql}`);
 }
 
 function createObjectFromInsertParams(params) {

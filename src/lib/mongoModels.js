@@ -1,10 +1,7 @@
 import mongoose from 'mongoose';
 
-const MONGODB_URI = process.env.MONGODB_URI;
-
-if (!MONGODB_URI) {
-  throw new Error('MONGODB_URI is not set in environment variables');
-}
+// Note: MONGODB_URI check happens in dbConnection.js at runtime
+// This prevents import-time errors in serverless environments
 
 // User schema
 const userSchema = new mongoose.Schema({
