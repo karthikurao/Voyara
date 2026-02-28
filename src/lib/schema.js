@@ -1,4 +1,4 @@
-import { connectDB } from './db';
+import { connectDB } from './dbConnection';
 
 // Ensures MongoDB connection is established
 export async function ensureCoreSchema() {
