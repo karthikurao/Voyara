@@ -10,7 +10,7 @@ function getModel() {
   if (!_model) {
     const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
     _model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash-exp",
+      model: "gemini-pro",
       generationConfig: {
         responseMimeType: "application/json"
       }
