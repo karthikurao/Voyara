@@ -1,23 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { z } from 'zod';
-
-if (!process.env.GOOGLE_API_KEY) {
-  console.warn('GOOGLE_API_KEY is not set. The /api/generate route will fail until it is configured.');
-}
-
-let _model;
-function getModel() {
-  if (!_model) {
-    const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
-    _model = genAI.getGenerativeModel({
-      model: "gemini-pro",
-      generationConfig: {
-        responseMimeType: "application/json"
-      }
-    });
-  }
-  return _model;
-}
 
 // Basic in-memory rate limit per IP (best-effort; for production, use a durable store)
 const bucket = new Map();
@@ -37,24 +18,65 @@ const RequestSchema = z.object({
   }).optional(),
 });
 
-function AIStream(stream) {
-  return new ReadableStream({
-    async start(controller) {
-      const encoder = new TextEncoder();
-      for await (const chunk of stream) {
-        const text = chunk.text();
-        controller.enqueue(encoder.encode(text));
-      }
-      controller.close();
-    },
+// DUMMY MODE: Gemini is disabled. This route will return a stable, hardcoded
+// JSON itinerary derived from the user's `destination`, `vibes`, and `numDays`.
+// This ensures the frontend always receives valid JSON and avoids any use of
+// the Google Generative AI SDK or network calls to Gemini.
+
+function makeDummyItinerary(destination, vibes, days) {
+  const safeDestination = destination || 'your destination';
+  const safeVibes = Array.isArray(vibes) && vibes.length ? vibes : ['relax'];
+  const scheduleTimes = [
+    ['9:00 AM', '12:30 PM', '3:30 PM', '7:00 PM'],
+    ['8:30 AM', '12:00 PM', '4:00 PM', '8:00 PM'],
+    ['9:30 AM', '1:00 PM', '3:00 PM', '6:30 PM'],
+  ];
+
+  const itinerary = Array.from({ length: days }, (_, i) => {
+    const dayIndex = i + 1;
+    const times = scheduleTimes[i % scheduleTimes.length];
+    return {
+      day: `Day ${dayIndex}`,
+      timeline: [
+        {
+          time: times[0],
+          activity: `Explore ${safeDestination} - Highlights`,
+          description: `A ${safeVibes.join(', ')} morning exploring key sights in ${safeDestination}.`,
+        },
+        {
+          time: times[1],
+          activity: `Local lunch and market visit`,
+          description: `Enjoy local flavors that match the ${safeVibes.join(', ')} vibe.`,
+        },
+        {
+          time: times[2],
+          activity: `Afternoon activity`,
+          description: `A relaxed ${safeVibes[0]} activity suited for ${safeDestination}.`,
+        },
+        {
+          time: times[3],
+          activity: `Evening dining`,
+          description: `Dinner at a recommended spot reflecting the ${safeVibes.join(', ')} vibe.`,
+        },
+      ],
+      food_suggestion: {
+        name: `${safeDestination} Local Cuisine`,
+        description: `Try local specialties that fit a ${safeVibes.join(', ')} trip.`,
+      },
+    };
   });
+
+  return {
+    itinerary,
+    bestTimeToVisit: {
+      months: 'Spring to Fall',
+      reason: `Generally pleasant weather for visiting ${destination}.`,
+    },
+  };
 }
 
 export async function POST(req) {
   try {
-    if (!process.env.GOOGLE_API_KEY) {
-      return new Response(JSON.stringify({ error: 'GOOGLE_API_KEY is not configured' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
-    }
 
     // Enforce same-origin for browsers; allow SSR/local tools gracefully
     const origin = req.headers.get('origin') || '';
@@ -111,58 +133,22 @@ export async function POST(req) {
         periodInstruction = `The trip is planned for **${travelPeriod}**. All suggested activities, their feasibility, opening hours, and alternative suggestions MUST be suitable and relevant for this specific month or season, explicitly considering typical weather, local events, or peak/off-peak conditions. Descriptions should reflect this.`;
     }
 
-    const prompt = `
-You are Voyara, an extremely detailed and highly obedient AI travel planner. You MUST create a JSON itinerary. Adherence to ALL user constraints below is MANDATORY and CRITICAL.
-Output ONLY the JSON object. Do not include any introductory or concluding text, comments, or markdown formatting outside the JSON structure.
-
-**User's Non-Negotiable Constraints:**
-- Destination: ${destination}
-${sourceCityInstruction}
-- Desired Vibe: ${vibes.join(", ")}
-- Trip Duration: Exactly ${days} days.
-${transportPreamble ? `- Transport Mode Constraint: ${transportPreamble}` : '- Transport Mode: Not specified; assume general multi-modal accessibility for arrival but prioritize local transport for activities.'}
-${transportExclusion ? `- Explicit Transport Exclusion: ${transportExclusion}` : ''}
-${periodInstruction ? `- Travel Period Constraint: ${periodInstruction}` : ''}
-
-**Task & Output Instructions:**
-Generate a detailed itinerary based *strictly and exclusively* on ALL the user's constraints above.
-The itinerary must feature specific timings (e.g., "9:00 AM", "1:30 PM") for each activity.
-
-**Required JSON Structure:**
-{
-  "itinerary": [ 
-    {
-      "day": "Day X", 
-      "timeline": [ 
-        {
-          "time": "HH:MM AM/PM", 
-          "activity": "Name of the activity",
-          "description": "1-3 sentences. This description MUST incorporate and reflect how the specified Transport Mode and Travel Period constraints influence this activity or its logistics, IF those constraints were provided."
-        }
-      ],
-      "food_suggestion": {
-        "name": "Restaurant Name or Type of Cuisine",
-        "description": "1-2 sentences. This description should also consider the Travel Period if specified."
-      }
+    // DUMMY MODE: Gemini calls are disabled. Return a deterministic dummy itinerary
+    // derived from the provided fields so the frontend always receives valid JSON.
+    try {
+      const dummy = makeDummyItinerary(destination, vibes, days);
+      return new Response(JSON.stringify(dummy), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch (err) {
+      console.error('Failed to create dummy itinerary:', err);
+      // Always return valid JSON with status 200 per requirement.
+      return new Response(JSON.stringify({ itinerary: [], bestTimeToVisit: { months: '', reason: '' } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
-  ],
-  "bestTimeToVisit": {
-    "months": "e.g., October to March or April, May",
-    "reason": "A brief 1-2 sentence explanation why these are good times to visit ${destination} (e.g., pleasant weather, festivals, fewer crowds)."
-  }
-}
-
-**Critical Reminders:**
-- If a non-'Airways' transport mode is specified, the ENTIRE itinerary, including initial arrival at ${destination} (possibly from ${sourceCity ? sourceCity : 'their starting point'}), must be planned without any flights or airport mentions.
-- All activity and food descriptions must align with the specified Vibe, Transport Mode, and Travel Period.
-- The "itinerary" array must contain exactly ${days} day objects.
-- The "bestTimeToVisit" object MUST be populated with relevant information for ${destination}.
-    ${refine ? `\nAdditional refinement instructions from the user: ${refine.instructions}\nIf a previous itinerary JSON is provided below, use it as a base and only modify relevant parts while keeping the same schema.\nPrevious JSON (may be empty):\n${refine.previous ? JSON.stringify(refine.previous).slice(0, 5000) : ''}` : ''}
-    `;
-
-    const result = await getModel().generateContentStream(prompt);
-    const stream = AIStream(result.stream);
-    return new Response(stream, { headers: { 'Content-Type': 'application/json' } });
 
   } catch (error) {
     console.error("Error in generate route:", error);

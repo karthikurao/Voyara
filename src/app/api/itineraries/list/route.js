@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { verifyStackAuthJWT } from '@/lib/auth';
-import { neonQuery } from '@/lib/db';
-import { ensureCoreSchema } from '@/lib/schema';
+import { connectDB } from '@/lib/mongodb';
+import { Itinerary } from '@/lib/schema';
 import { buildItineraryInsights, mergeChecklistState } from '@/lib/insights';
 
 export const dynamic = 'force-dynamic';
@@ -9,20 +9,25 @@ export const dynamic = 'force-dynamic';
 export async function GET(req) {
   // Auth: Bearer token from header
   const authHeader = req.headers.get('authorization');
+  console.log('[Backend] Authorization header received:', authHeader ? `${authHeader.substring(0, 30)}...` : 'MISSING');
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    console.error('[Backend] Missing or invalid authorization format');
     return NextResponse.json({ error: 'Missing or invalid token' }, { status: 401 });
   }
   const token = authHeader.replace('Bearer ', '');
+  console.log('[Backend] Token extracted, verifying...');
   const user = await verifyStackAuthJWT(token);
   if (!user) {
+    console.error('[Backend] Token verification failed');
     return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
   }
+  console.log('[Backend] Token verified for user:', user.sub);
 
   try {
-    await ensureCoreSchema();
-    const sql = `SELECT * FROM itineraries WHERE user_id = $1 ORDER BY created_at DESC`;
-    const params = [user.sub];
-    const data = await neonQuery(sql, params);
+    await connectDB();
+
+    // Fetch all itineraries for the user, sorted by creation date
+    const data = await Itinerary.find({ user_id: user.sub }).sort({ created_at: -1 }).lean();
 
     const enriched = await Promise.all((data || []).map(async (trip) => {
       if (trip.metadata) {
@@ -30,15 +35,20 @@ export async function GET(req) {
       }
       const insights = buildItineraryInsights(trip.itinerary_data, trip.context || { destination: trip.destination });
       const merged = mergeChecklistState({}, insights);
-      await neonQuery(
-        'UPDATE itineraries SET metadata = $2::jsonb, updated_at = NOW() WHERE id = $1',
-        [trip.id, JSON.stringify(merged)],
+      
+      // Update the itinerary with new metadata
+      await Itinerary.findByIdAndUpdate(
+        trip._id,
+        { metadata: merged, updated_at: new Date() },
+        { new: true }
       );
+      
       return { ...trip, metadata: merged };
     }));
 
     return NextResponse.json({ itineraries: enriched });
   } catch (error) {
+    console.error('Failed to fetch itineraries:', error);
     return NextResponse.json({ error: `Failed to fetch itineraries. ${error.message}` }, { status: 500 });
   }
 }

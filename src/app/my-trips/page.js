@@ -1,10 +1,12 @@
 
 "use client";
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import SavedItineraryList from '@/components/SavedItineraryList';
 
 export default function MyTripsPage() {
+  const router = useRouter();
   const [savedItineraries, setSavedItineraries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -13,21 +15,24 @@ export default function MyTripsPage() {
     setLoading(true);
     setError(null);
     try {
-  const jwt = window.localStorage.getItem('voyaraAuthToken');
+      const jwt = window.localStorage.getItem('voyaraAuthToken');
+      console.log('[Frontend] Token from localStorage:', jwt ? 'Token found (length: ' + jwt.length + ')' : 'NO TOKEN FOUND');
       if (!jwt) {
-        setError('Please log in to view saved trips.');
-        setSavedItineraries([]);
-        setLoading(false);
+        console.warn('[Frontend] No token - redirecting to login');
+        router.push('/login');
         return;
       }
+      console.log('[Frontend] Sending authorization header:', `Bearer ${jwt.substring(0, 20)}...`);
       const res = await fetch('/api/itineraries/list', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${jwt}`,
         },
       });
+      console.log('[Frontend] Response status:', res.status);
       if (!res.ok) throw new Error((await res.json())?.error || 'Failed to fetch trips');
       const data = await res.json();
+      console.log('[Frontend] Successfully fetched itineraries:', data.itineraries?.length || 0);
       setSavedItineraries(data.itineraries || []);
     } catch (err) {
       setError(err.message);
