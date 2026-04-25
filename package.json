@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "node --experimental-test-coverage --test-coverage-lines=85 --test-coverage-branches=85 --test-coverage-functions=85 --test-isolation=none --loader ./tests/alias-loader.mjs --test tests/*.test.mjs"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

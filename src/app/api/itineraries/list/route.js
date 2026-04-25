@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { verifyStackAuthJWT } from '@/lib/auth';
+import { authenticateRequest } from '@/lib/auth';
 import { connectDB } from '@/lib/mongodb';
 import { Itinerary } from '@/lib/schema';
 import { buildItineraryInsights, mergeChecklistState } from '@/lib/insights';
@@ -7,21 +7,10 @@ import { buildItineraryInsights, mergeChecklistState } from '@/lib/insights';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req) {
-  // Auth: Bearer token from header
-  const authHeader = req.headers.get('authorization');
-  console.log('[Backend] Authorization header presence:', authHeader ? 'PRESENT' : 'MISSING');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    console.error('[Backend] Missing or invalid authorization format');
-    return NextResponse.json({ error: 'Missing or invalid token' }, { status: 401 });
-  }
-  const token = authHeader.replace('Bearer ', '');
-  console.log('[Backend] Verifying bearer token');
-  const user = await verifyStackAuthJWT(token);
+  const user = await authenticateRequest(req);
   if (!user) {
-    console.error('[Backend] Token verification failed');
     return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
   }
-  console.log('[Backend] Token verified successfully');
 
   try {
     await connectDB();

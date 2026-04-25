@@ -1,16 +1,15 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
-import { verifyStackAuthJWT } from "@/lib/auth";
+import { authenticateRequest } from "@/lib/auth";
+import { rejectCrossOrigin } from "@/lib/request-security";
 import { Itinerary } from "@/lib/schema";
 
 export async function POST(req) {
   try {
-    const authHeader = req.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ error: 'Missing or invalid token' }, { status: 401 });
-    }
-    const token = authHeader.replace('Bearer ', '');
-    const user = await verifyStackAuthJWT(token);
+    const originError = rejectCrossOrigin(req);
+    if (originError) return originError;
+
+    const user = await authenticateRequest(req);
     if (!user) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }

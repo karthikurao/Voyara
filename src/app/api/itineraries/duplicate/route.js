@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { verifyStackAuthJWT } from '@/lib/auth';
+import { authenticateRequest } from '@/lib/auth';
+import { mongoIdSchema, readJsonBody, rejectCrossOrigin } from '@/lib/request-security';
 import { connectDB } from '@/lib/mongodb';
 import { Itinerary } from '@/lib/schema';
 import { buildItineraryInsights, mergeChecklistState } from '@/lib/insights';
@@ -8,28 +9,19 @@ import { buildItineraryInsights, mergeChecklistState } from '@/lib/insights';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req) {
-  // Enforce same-origin to mitigate CSRF for browsers
-  const origin = req.headers.get('origin') || '';
-  const host = req.headers.get('host') || '';
-  if (origin && !origin.includes(host)) {
-    return NextResponse.json({ error: 'Invalid origin' }, { status: 403 });
-  }
+  const originError = rejectCrossOrigin(req);
+  if (originError) return originError;
 
-  // 1. Check if the user is authenticated via Voyara JWT
-  const authHeader = req.headers.get('authorization') || '';
-  const jwt = authHeader.replace(/^Bearer /i, '');
-  const user = await verifyStackAuthJWT(jwt);
+  const user = await authenticateRequest(req);
   if (!user) {
     return NextResponse.json({ error: 'You must be logged in to duplicate an itinerary.' }, { status: 401 });
   }
 
-  // 2. Get the itinerary id from the request
-  const bodyText = await req.text();
-  let parsedBody;
-  try { parsedBody = JSON.parse(bodyText); } catch { return NextResponse.json({ error: 'Invalid JSON payload.' }, { status: 400 }); }
+  const { data: parsedBody, error: bodyError } = await readJsonBody(req);
+  if (bodyError) return bodyError;
 
   const Schema = z.object({
-    id: z.string().min(1),
+    id: z.string().regex(mongoIdSchema, 'Invalid itinerary id'),
   });
   const result = Schema.safeParse(parsedBody);
   if (!result.success) {

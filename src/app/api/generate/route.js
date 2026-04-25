@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { z } from 'zod';
+import { rejectCrossOrigin } from '../../../lib/request-security.js';
 
 if (!process.env.GOOGLE_API_KEY) {
   console.warn('GOOGLE_API_KEY is not set. The /api/generate route will fail until it is configured.');
@@ -50,18 +51,14 @@ function AIStream(stream) {
   });
 }
 
-export async function POST(req) {
+export async function handleGenerateRequest(req, { getModelImpl = getModel } = {}) {
   try {
     if (!process.env.GOOGLE_API_KEY) {
       return new Response(JSON.stringify({ error: 'GOOGLE_API_KEY is not configured' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
     }
 
-    // Enforce same-origin for browsers; allow SSR/local tools gracefully
-    const origin = req.headers.get('origin') || '';
-    const host = req.headers.get('host') || '';
-    if (origin && !origin.includes(host)) {
-      return new Response(JSON.stringify({ error: 'Invalid origin' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
-    }
+    const originError = rejectCrossOrigin(req);
+    if (originError) return originError;
 
     // Minimal IP-based rate limit
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || req.headers.get('x-real-ip') || 'unknown';
@@ -160,7 +157,7 @@ The itinerary must feature specific timings (e.g., "9:00 AM", "1:30 PM") for eac
     ${refine ? `\nAdditional refinement instructions from the user: ${refine.instructions}\nIf a previous itinerary JSON is provided below, use it as a base and only modify relevant parts while keeping the same schema.\nPrevious JSON (may be empty):\n${refine.previous ? JSON.stringify(refine.previous).slice(0, 5000) : ''}` : ''}
     `;
 
-    const result = await getModel().generateContentStream(prompt);
+    const result = await getModelImpl().generateContentStream(prompt);
     const stream = AIStream(result.stream);
     return new Response(stream, { headers: { 'Content-Type': 'application/json' } });
 
@@ -171,4 +168,8 @@ The itinerary must feature specific timings (e.g., "9:00 AM", "1:30 PM") for eac
       headers: { 'Content-Type': 'application/json' },
     });
   }
+}
+
+export async function POST(req) {
+  return handleGenerateRequest(req);
 }

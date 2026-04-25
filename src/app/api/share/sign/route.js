@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { SignJWT } from 'jose';
-import { verifyStackAuthJWT } from '@/lib/auth';
+import { authenticateRequest } from '@/lib/auth';
+import { mongoIdSchema, rejectCrossOrigin } from '@/lib/request-security';
 import { connectDB } from '@/lib/mongodb';
 import { Itinerary } from '@/lib/schema';
 
@@ -8,16 +9,10 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req) {
   try {
-    const origin = req.headers.get('origin') || '';
-    const host = req.headers.get('host') || '';
-    if (origin && !origin.includes(host)) {
-      return NextResponse.json({ error: 'Invalid origin' }, { status: 403 });
-    }
+    const originError = rejectCrossOrigin(req);
+    if (originError) return originError;
 
-    // Verify user authentication via Voyara JWT
-    const authHeader = req.headers.get('authorization') || '';
-    const jwt = authHeader.replace(/^Bearer /i, '');
-    const user = await verifyStackAuthJWT(jwt);
+    const user = await authenticateRequest(req);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     // Simple per-user rate limit (30 req / 10 min)
@@ -35,7 +30,9 @@ export async function POST(req) {
     }
 
     const { itineraryId } = await req.json();
-    if (!itineraryId) return NextResponse.json({ error: 'Missing itineraryId' }, { status: 400 });
+    if (!mongoIdSchema.test(itineraryId || '')) {
+      return NextResponse.json({ error: 'Invalid itineraryId' }, { status: 400 });
+    }
 
     // Ensure the itinerary belongs to the requesting user
     await connectDB();

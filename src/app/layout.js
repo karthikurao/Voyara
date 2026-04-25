@@ -1,8 +1,4 @@
-import { Inter } from "next/font/google";
 import "./globals.css";
-import { Analytics } from "@vercel/analytics/next"
-
-const inter = Inter({ subsets: ["latin"] });
 
 // Updated metadata object
 export const metadata = {
@@ -19,7 +15,7 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body className={`${inter.className} bg-gray-900 bg-gradient-to-br from-gray-900 via-purple-900/30 to-gray-900`}>
+      <body className="font-sans bg-gray-900 bg-gradient-to-br from-gray-900 via-purple-900/30 to-gray-900">
         {children}
       </body>
     </html>
