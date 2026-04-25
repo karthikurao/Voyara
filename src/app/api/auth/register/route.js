@@ -19,6 +19,12 @@ export async function POST(req) {
     const originError = rejectCrossOrigin(req);
     if (originError) return originError;
 
+    const body = await req.json();
+    const parsed = RegisterSchema.safeParse(body);
+    if (!parsed.success) {
+      return noStoreResponse({ error: 'Invalid payload', details: parsed.error.flatten() }, { status: 400 });
+    }
+
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
     const limit = rateLimit(`register:${ip}`, { limit: 5, windowMs: 60 * 60 * 1000 });
     if (!limit.allowed) {
@@ -26,12 +32,6 @@ export async function POST(req) {
         { error: 'Too many registration attempts. Please try again later.' },
         { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } }
       );
-    }
-
-    const body = await req.json();
-    const parsed = RegisterSchema.safeParse(body);
-    if (!parsed.success) {
-      return noStoreResponse({ error: 'Invalid payload', details: parsed.error.flatten() }, { status: 400 });
     }
 
     const { email, password } = parsed.data;

@@ -32,7 +32,16 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data?.error || 'Request failed');
+        const detailMessages = [];
+        const issues = data?.details?.fieldErrors;
+        if (issues) {
+          for (const [field, messages] of Object.entries(issues)) {
+            if (Array.isArray(messages) && messages.length > 0) {
+              detailMessages.push(`${field}: ${messages[0]}`);
+            }
+          }
+        }
+        throw new Error(detailMessages.length > 0 ? detailMessages.join(' | ') : data?.error || 'Request failed');
       }
 
       if (data?.token) {
@@ -79,7 +88,7 @@ export default function LoginPage() {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4" suppressHydrationWarning>
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-1">Email address</label>
             <input
@@ -88,7 +97,8 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              autoComplete="email"
+              autoComplete={mode === 'login' ? 'email' : 'username'}
+              suppressHydrationWarning
               className="w-full bg-white/10 text-white p-3 rounded-lg border border-white/20 focus:ring-2 focus:ring-purple-500 outline-none"
               placeholder="you@example.com"
             />
@@ -102,10 +112,17 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              minLength={8}
+              minLength={12}
+              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+              suppressHydrationWarning
               className="w-full bg-white/10 text-white p-3 rounded-lg border border-white/20 focus:ring-2 focus:ring-purple-500 outline-none"
-              placeholder="Minimum 8 characters"
+              placeholder={mode === 'login' ? 'Enter your password' : '12+ chars, upper/lower/number/symbol'}
             />
+            {mode === 'register' && (
+              <p className="mt-1 text-xs text-gray-400">
+                Password must be at least 12 characters and include uppercase, lowercase, a number, and a symbol.
+              </p>
+            )}
           </div>
 
           {error && (
