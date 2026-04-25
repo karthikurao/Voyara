@@ -60,19 +60,15 @@ export default function SavedItineraryList({ savedItineraries, onReload }) {
 
   const getJWT = () => {
     const token = window.localStorage.getItem('voyaraAuthToken');
-    console.log('[SavedItineraryList] Retrieved token:', token ? `Token found (length: ${token.length})` : 'NO TOKEN FOUND');
     if (!token) {
-      console.warn('[SavedItineraryList] No token available - cannot proceed');
       throw new Error('Please log in to manage itineraries.');
     }
-    console.log('[SavedItineraryList] Token valid, proceeding with API call');
     return token;
   };
 
   const handleSaveEdit = async (trip) => {
     try {
       const jwt = getJWT();
-      console.log('[SavedItineraryList] Sending save request with Authorization header');
       const res = await fetch('/api/itineraries/save', {
         method: 'POST',
         headers: {
