@@ -247,8 +247,14 @@ The itinerary must feature specific timings (e.g., "9:00 AM", "1:30 PM") for eac
     ${refine ? `\nAdditional refinement instructions from the user: ${refine.instructions}\nIf a previous itinerary JSON is provided below, use it as a base and only modify relevant parts while keeping the same schema.\nPrevious JSON (may be empty):\n${refine.previous ? JSON.stringify(refine.previous).slice(0, 5000) : ''}` : ''}
     `;
 
-    const effectiveGenerateImpl = generateImpl
-      || (getModelImpl ? (prompt) => generateWithModelFallback(prompt, getModelImpl) : generateWithModelFallback);
+    let effectiveGenerateImpl;
+    if (generateImpl) {
+      effectiveGenerateImpl = generateImpl;
+    } else if (getModelImpl) {
+      effectiveGenerateImpl = (prompt) => generateWithModelFallback(prompt, getModelImpl);
+    } else {
+      effectiveGenerateImpl = generateWithModelFallback;
+    }
 
     const result = await effectiveGenerateImpl(prompt);
     const stream = AIStream(result.stream);
