@@ -56,7 +56,7 @@ export async function POST(req) {
     return NextResponse.json(
       {
         success: false,
-        error: "Internal Server Error",
+        error: "Failed to save itinerary",
       },
       { status: 500 }
     );
