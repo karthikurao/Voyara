@@ -7,10 +7,7 @@ if (!cached) {
 }
 
 export async function connectDB() {
-  const mongodbUri = process.env.MONGODB_URI;
-  if (!mongodbUri) {
-    throw new Error("Please define MONGODB_URI in .env.local");
-  }
+  const mongodbUri = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/voyara";
 
   if (cached.conn) {
     return cached.conn;

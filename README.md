@@ -59,17 +59,22 @@ cd voyara
 npm install
 ```
 
+`npm install` automatically attempts to start a local MongoDB container (`docker compose up -d mongodb`).
+
 3) Env vars (.env.local or see `env.example`)
 ```env
 GOOGLE_API_KEY="YOUR_GOOGLE_GEMINI_API_KEY"
-NEON_API_URL="https://YOUR_NEON_REST_ENDPOINT/rest/v1"
-NEON_API_KEY="YOUR_OPTIONAL_NEON_API_KEY"
+MONGODB_URI="mongodb://127.0.0.1:27017/voyara"
 AUTH_SECRET="A_LONG_RANDOM_STRING"
+AUTH_ISSUER="voyara"
+AUTH_AUDIENCE="voyara-web"
 SHARE_TOKEN_SECRET="ANOTHER_LONG_RANDOM_STRING"
 ```
 
-4) Neon SQL schema
-- See `/sql/neon-schema.sql` for table creation (itineraries, shares, profiles)
+4) If MongoDB was not auto-started
+```bash
+npm run db:up
+```
 
 5) Run dev
 ```bash
@@ -87,7 +92,7 @@ Open http://localhost:3000
 
 ## 🔐 Authentication Workflow
 - Users register and log in with email + password (`/login` page).
-- Credentials are stored in Neon (`users` table) with bcrypt hashing.
+- Credentials are stored in MongoDB (`users` collection) with bcrypt hashing.
 - Successful login returns a JWT signed with `AUTH_SECRET`; the client stores it in `localStorage` as `voyaraAuthToken` and includes it as a Bearer token for protected API calls.
 - To seed users manually you can call `/api/auth/register` with `{ email, password }`.
 
@@ -95,6 +100,7 @@ Open http://localhost:3000
 
 ## Notes
 - For production, set a strong `SHARE_TOKEN_SECRET`. Share links expire in 30 days by default.
+- `AUTH_SECRET` must be at least 32 characters.
 - User JWT tokens are stored in `localStorage` under the key `voyaraAuthToken` after login.
 
 ---

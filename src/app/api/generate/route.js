@@ -6,18 +6,104 @@ if (!process.env.GOOGLE_API_KEY) {
   console.warn('GOOGLE_API_KEY is not set. The /api/generate route will fail until it is configured.');
 }
 
-let _model;
-function getModel() {
-  if (!_model) {
-    const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
-    _model = genAI.getGenerativeModel({
-      model: "gemini-pro",
+let _genAI;
+const modelCache = new Map();
+let availableModelsCache = { ts: 0, models: [] };
+
+function getGenAI() {
+  if (!_genAI) {
+    _genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+  }
+  return _genAI;
+}
+
+function getCandidateModels() {
+  const fromEnv = (process.env.GOOGLE_MODEL || '')
+    .split(',')
+    .map((m) => m.trim())
+    .filter(Boolean);
+
+  const defaults = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+  return [...new Set([...fromEnv, ...defaults])];
+}
+
+async function listAvailableModels() {
+  const now = Date.now();
+  if (now - availableModelsCache.ts < 10 * 60 * 1000 && availableModelsCache.models.length > 0) {
+    return availableModelsCache.models;
+  }
+
+  const apiKey = process.env.GOOGLE_API_KEY;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    return [];
+  }
+
+  const data = await res.json();
+  const models = (data?.models || [])
+    .filter((m) => Array.isArray(m.supportedGenerationMethods) && (m.supportedGenerationMethods.includes('generateContent') || m.supportedGenerationMethods.includes('streamGenerateContent')))
+    .map((m) => String(m.name || '').replace(/^models\//, ''))
+    .filter(Boolean);
+
+  availableModelsCache = { ts: now, models };
+  return models;
+}
+
+function getModel(modelName) {
+  if (!modelCache.has(modelName)) {
+    const model = getGenAI().getGenerativeModel({
+      model: modelName,
       generationConfig: {
         responseMimeType: "application/json"
       }
     });
+    modelCache.set(modelName, model);
   }
-  return _model;
+
+  return modelCache.get(modelName);
+}
+
+function isUnavailableModelError(error) {
+  const message = String(error?.message || '').toLowerCase();
+  return message.includes('not found') || message.includes('not supported for generatecontent');
+}
+
+function isQuotaError(error) {
+  const message = String(error?.message || '').toLowerCase();
+  return message.includes('quota exceeded') || message.includes('429 too many requests');
+}
+
+async function generateWithModelFallback(prompt) {
+  const preferred = getCandidateModels();
+  const available = await listAvailableModels();
+  const candidates = available.length > 0
+    ? [...preferred.filter((m) => available.includes(m)), ...preferred.filter((m) => !available.includes(m))]
+    : preferred;
+
+  let lastError = null;
+  const errors = [];
+
+  for (const modelName of candidates) {
+    try {
+      const result = await getModel(modelName).generateContentStream(prompt);
+      return result;
+    } catch (error) {
+      lastError = error;
+      errors.push(`${modelName}: ${String(error?.message || 'unknown error')}`);
+      if (isUnavailableModelError(error) || isQuotaError(error)) {
+        console.warn(`[Generate] Skipping model ${modelName}: ${error?.message || 'unavailable/quota error'}`);
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  const details = errors.slice(0, 3).join(' | ');
+  if (details) {
+    throw new Error(`No usable Gemini model found for this API key/project. ${details}`);
+  }
+  throw lastError || new Error('No usable Gemini model found for this API key/project.');
 }
 
 // Basic in-memory rate limit per IP (best-effort; for production, use a durable store)
@@ -51,7 +137,7 @@ function AIStream(stream) {
   });
 }
 
-export async function handleGenerateRequest(req, { getModelImpl = getModel } = {}) {
+export async function handleGenerateRequest(req, { generateImpl = generateWithModelFallback } = {}) {
   try {
     if (!process.env.GOOGLE_API_KEY) {
       return new Response(JSON.stringify({ error: 'GOOGLE_API_KEY is not configured' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
@@ -157,7 +243,7 @@ The itinerary must feature specific timings (e.g., "9:00 AM", "1:30 PM") for eac
     ${refine ? `\nAdditional refinement instructions from the user: ${refine.instructions}\nIf a previous itinerary JSON is provided below, use it as a base and only modify relevant parts while keeping the same schema.\nPrevious JSON (may be empty):\n${refine.previous ? JSON.stringify(refine.previous).slice(0, 5000) : ''}` : ''}
     `;
 
-    const result = await getModelImpl().generateContentStream(prompt);
+    const result = await generateImpl(prompt);
     const stream = AIStream(result.stream);
     return new Response(stream, { headers: { 'Content-Type': 'application/json' } });
 
