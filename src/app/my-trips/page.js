@@ -22,7 +22,6 @@ export default function MyTripsPage() {
         router.push('/login');
         return;
       }
-      console.log('[Frontend] Sending authorization header:', `Bearer ${jwt.substring(0, 20)}...`);
       const res = await fetch('/api/itineraries/list', {
         method: 'GET',
         headers: {
