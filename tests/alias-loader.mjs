@@ -1,5 +1,6 @@
 import { pathToFileURL } from 'node:url';
 import { join } from 'node:path';
+import { existsSync } from 'node:fs';
 
 export async function resolve(specifier, context, nextResolve) {
   if (specifier === 'next/server') {
@@ -7,8 +8,10 @@ export async function resolve(specifier, context, nextResolve) {
   }
 
   if (specifier.startsWith('@/')) {
-    const absolutePath = join(process.cwd(), 'src', specifier.slice(2));
-    return nextResolve(pathToFileURL(absolutePath).href, context);
+    const base = join(process.cwd(), 'src', specifier.slice(2));
+    const candidates = [base, `${base}.js`, join(base, 'index.js')];
+    const resolved = candidates.find(existsSync) ?? base;
+    return nextResolve(pathToFileURL(resolved).href, context);
   }
 
   return nextResolve(specifier, context);

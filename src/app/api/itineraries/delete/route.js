@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server.js';
 import { z } from 'zod';
-import { authenticateRequest } from '../../../../lib/auth.js';
-import { mongoIdSchema, readJsonBody, rejectCrossOrigin } from '../../../../lib/request-security.js';
+import { authenticateRequest } from '@/lib/auth';
+import { mongoIdSchema, readJsonBody, rejectCrossOrigin } from '@/lib/request-security';
 
 export const dynamic = 'force-dynamic';
 

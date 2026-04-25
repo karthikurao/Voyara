@@ -37,6 +37,14 @@ export function rateLimit(key, { limit, windowMs }) {
   globalThis.__voyaraRateLimits = globalThis.__voyaraRateLimits || new Map();
 
   const now = Date.now();
+
+  // Evict all expired entries to prevent unbounded memory growth.
+  for (const [k, v] of globalThis.__voyaraRateLimits) {
+    if (now > v.resetAt) {
+      globalThis.__voyaraRateLimits.delete(k);
+    }
+  }
+
   const record = globalThis.__voyaraRateLimits.get(key) || { count: 0, resetAt: now + windowMs };
 
   if (now > record.resetAt) {
@@ -55,7 +63,7 @@ export function rateLimit(key, { limit, windowMs }) {
 
 export async function readJsonBody(req, maxBytes = DEFAULT_MAX_BODY_BYTES) {
   const bodyText = await req.text();
-  if (bodyText.length > maxBytes) {
+  if (Buffer.byteLength(bodyText, 'utf8') > maxBytes) {
     return { error: NextResponse.json({ error: 'Payload too large.' }, { status: 413 }) };
   }
 

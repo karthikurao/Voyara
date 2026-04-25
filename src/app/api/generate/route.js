@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { z } from 'zod';
-import { rejectCrossOrigin } from '../../../lib/request-security.js';
+import { rejectCrossOrigin } from '@/lib/request-security';
 
 if (!process.env.GOOGLE_API_KEY) {
   console.warn('GOOGLE_API_KEY is not set. The /api/generate route will fail until it is configured.');
@@ -35,19 +35,23 @@ async function listAvailableModels() {
 
   const apiKey = process.env.GOOGLE_API_KEY;
   const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`;
-  const res = await fetch(url);
-  if (!res.ok) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      return [];
+    }
+
+    const data = await res.json();
+    const models = (data?.models || [])
+      .filter((m) => Array.isArray(m.supportedGenerationMethods) && (m.supportedGenerationMethods.includes('generateContent') || m.supportedGenerationMethods.includes('streamGenerateContent')))
+      .map((m) => String(m.name || '').replace(/^models\//, ''))
+      .filter(Boolean);
+
+    availableModelsCache = { ts: now, models };
+    return models;
+  } catch {
     return [];
   }
-
-  const data = await res.json();
-  const models = (data?.models || [])
-    .filter((m) => Array.isArray(m.supportedGenerationMethods) && (m.supportedGenerationMethods.includes('generateContent') || m.supportedGenerationMethods.includes('streamGenerateContent')))
-    .map((m) => String(m.name || '').replace(/^models\//, ''))
-    .filter(Boolean);
-
-  availableModelsCache = { ts: now, models };
-  return models;
 }
 
 function getModel(modelName) {
@@ -74,7 +78,7 @@ function isQuotaError(error) {
   return message.includes('quota exceeded') || message.includes('429 too many requests');
 }
 
-async function generateWithModelFallback(prompt) {
+async function generateWithModelFallback(prompt, getModelFn = getModel) {
   const preferred = getCandidateModels();
   const available = await listAvailableModels();
   const candidates = available.length > 0
@@ -86,7 +90,7 @@ async function generateWithModelFallback(prompt) {
 
   for (const modelName of candidates) {
     try {
-      const result = await getModel(modelName).generateContentStream(prompt);
+      const result = await getModelFn(modelName).generateContentStream(prompt);
       return result;
     } catch (error) {
       lastError = error;
@@ -137,7 +141,7 @@ function AIStream(stream) {
   });
 }
 
-export async function handleGenerateRequest(req, { generateImpl = generateWithModelFallback } = {}) {
+export async function handleGenerateRequest(req, { generateImpl, getModelImpl } = {}) {
   try {
     if (!process.env.GOOGLE_API_KEY) {
       return new Response(JSON.stringify({ error: 'GOOGLE_API_KEY is not configured' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
@@ -243,7 +247,10 @@ The itinerary must feature specific timings (e.g., "9:00 AM", "1:30 PM") for eac
     ${refine ? `\nAdditional refinement instructions from the user: ${refine.instructions}\nIf a previous itinerary JSON is provided below, use it as a base and only modify relevant parts while keeping the same schema.\nPrevious JSON (may be empty):\n${refine.previous ? JSON.stringify(refine.previous).slice(0, 5000) : ''}` : ''}
     `;
 
-    const result = await generateImpl(prompt);
+    const effectiveGenerateImpl = generateImpl
+      || (getModelImpl ? (prompt) => generateWithModelFallback(prompt, getModelImpl) : generateWithModelFallback);
+
+    const result = await effectiveGenerateImpl(prompt);
     const stream = AIStream(result.stream);
     return new Response(stream, { headers: { 'Content-Type': 'application/json' } });
 
