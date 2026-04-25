@@ -1,10 +1,20 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 
-const AUTH_SECRET = process.env.AUTH_SECRET;
+const MIN_SECRET_LENGTH = 32;
 
-if (!AUTH_SECRET) {
-  console.warn('AUTH_SECRET is not set. Authentication routes will fail until it is configured.');
+function getAuthSecret() {
+  const authSecret = process.env.AUTH_SECRET;
+
+  if (!authSecret) {
+    throw new Error('AUTH_SECRET is not configured');
+  }
+
+  if (authSecret.length < MIN_SECRET_LENGTH) {
+    throw new Error(`AUTH_SECRET must be at least ${MIN_SECRET_LENGTH} characters`);
+  }
+
+  return authSecret;
 }
 
 export async function hashPassword(password) {
@@ -16,41 +26,66 @@ export async function verifyPassword(password, hash) {
 }
 
 export function signAuthToken(user) {
-  if (!AUTH_SECRET) {
-    throw new Error('AUTH_SECRET is not configured');
-  }
+  const secret = getAuthSecret();
 
   const payload = {
-    sub: user._id || user.id,
+    sub: String(user._id || user.id),
     email: user.email,
   };
 
-  return jwt.sign(payload, AUTH_SECRET, { expiresIn: '7d' });
+  return jwt.sign(payload, secret, {
+    algorithm: 'HS256',
+    expiresIn: '7d',
+    issuer: process.env.AUTH_ISSUER || 'voyara',
+    audience: process.env.AUTH_AUDIENCE || 'voyara-web',
+  });
 }
 
-export async function verifyStackAuthJWT(token) {
-  if (!token) {
+export function extractBearerToken(req) {
+  const authHeader = req.headers.get('authorization') || '';
+  const match = authHeader.match(/^Bearer\s+([A-Za-z0-9._~-]+)$/i);
+  return match ? match[1] : null;
+}
+
+export async function verifyAuthJWT(token) {
+  if (!token || typeof token !== 'string') {
     return null;
   }
 
-  const allowDevAuthBypass =
-    process.env.NODE_ENV === 'development' &&
-    process.env.ALLOW_DEV_AUTH_BYPASS === 'true';
-
-  if (allowDevAuthBypass) {
-    console.warn('[Auth] Development auth bypass enabled - returning test user');
-    return { sub: 'test-user-id', email: 'test@example.com' };
-  }
-
-  if (!AUTH_SECRET) {
-    console.warn('[Auth] AUTH_SECRET is not configured - returning null');
+  let secret;
+  try {
+    secret = getAuthSecret();
+  } catch (err) {
+    console.error('[Auth] Server auth configuration error:', err.message);
     return null;
   }
 
   try {
-    return jwt.verify(token, AUTH_SECRET);
+    const payload = jwt.verify(token, secret, {
+      algorithms: ['HS256'],
+      issuer: process.env.AUTH_ISSUER || 'voyara',
+      audience: process.env.AUTH_AUDIENCE || 'voyara-web',
+      clockTolerance: 5,
+    });
+
+    if (!payload?.sub || !payload?.email) {
+      return null;
+    }
+
+    return payload;
   } catch (err) {
     console.warn('[Auth] JWT verification failed:', err.message);
     return null;
   }
+}
+
+export const verifyStackAuthJWT = verifyAuthJWT;
+
+export async function authenticateRequest(req) {
+  const token = extractBearerToken(req);
+  if (!token) {
+    return null;
+  }
+
+  return verifyAuthJWT(token);
 }

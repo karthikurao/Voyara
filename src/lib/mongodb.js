@@ -1,11 +1,5 @@
 import mongoose from "mongoose";
 
-const MONGODB_URI = process.env.MONGODB_URI;
-
-if (!MONGODB_URI) {
-  throw new Error("Please define MONGODB_URI in .env.local");
-}
-
 let cached = global.mongoose;
 
 if (!cached) {
@@ -13,12 +7,14 @@ if (!cached) {
 }
 
 export async function connectDB() {
+  const mongodbUri = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/voyara";
+
   if (cached.conn) {
     return cached.conn;
   }
 
   if (!cached.promise) {
-    cached.promise = mongoose.connect(MONGODB_URI, {
+    cached.promise = mongoose.connect(mongodbUri, {
       maxPoolSize: 10,
       minPoolSize: 5,
     }).then((conn) => {

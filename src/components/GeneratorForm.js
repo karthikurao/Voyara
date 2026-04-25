@@ -105,7 +105,7 @@ export default function GeneratorForm() {
       setFinalItinerary(finalJson);
 
     } catch (err) {
-      setError("Failed to generate itinerary. The AI may be overloaded or the response was not valid JSON. Please try again.");
+      setError(err?.message || "Failed to generate itinerary. The AI may be overloaded or the response was not valid JSON. Please try again.");
       console.error("Error during fetch or JSON parsing:", err, "Raw response was:", fullResponse);
     } finally {
       setLoading(false);
