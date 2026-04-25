@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { verifyStackAuthJWT } from '@/lib/auth';
-import { neonQuery } from '@/lib/db';
-import { ensureCoreSchema } from '@/lib/schema';
+import { connectDB } from '@/lib/mongodb';
+import { Itinerary } from '@/lib/schema';
 import { buildItineraryInsights, mergeChecklistState } from '@/lib/insights';
 
 export const dynamic = 'force-dynamic';
@@ -39,32 +39,25 @@ export async function POST(req) {
 
   // 3. Fetch and duplicate the itinerary if owned by user
   try {
-    await ensureCoreSchema();
+    await connectDB();
     // Fetch itinerary
-    const fetchRes = await neonQuery('SELECT * FROM itineraries WHERE id = $1', [id]);
-    const trip = fetchRes[0];
-    if (!trip || trip.user_id !== user.sub) {
+    const trip = await Itinerary.findById(id);
+    if (!trip || trip.user_id.toString() !== user.sub) {
       return NextResponse.json({ error: 'Not found or unauthorized' }, { status: 404 });
     }
     const context = trip.context || { destination: trip.destination };
     const insights = buildItineraryInsights(trip.itinerary_data, context);
     const metadata = mergeChecklistState({}, insights);
 
-    const insert = await neonQuery(
-      `INSERT INTO itineraries (user_id, destination, itinerary_data, context, metadata, is_public)
-       VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6)
-       RETURNING id`,
-      [
-        user.sub,
-        trip.destination,
-        JSON.stringify(trip.itinerary_data),
-        JSON.stringify(context),
-        JSON.stringify(metadata),
-        false,
-      ],
-    );
-    const newTrip = insert[0];
-    return NextResponse.json({ success: true, newId: newTrip?.id });
+    const newTrip = await Itinerary.create({
+      user_id: user.sub,
+      destination: trip.destination,
+      itinerary_data: trip.itinerary_data,
+      context,
+      metadata,
+      is_public: false,
+    });
+    return NextResponse.json({ success: true, newId: newTrip._id });
   } catch (err) {
     return NextResponse.json({ error: 'Failed to duplicate itinerary', details: err?.message || err }, { status: 500 });
   }

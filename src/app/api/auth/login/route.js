@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { neonQuery } from '@/lib/db';
+import { connectDB } from '@/lib/mongodb';
 import { verifyPassword, signAuthToken } from '@/lib/auth';
+import { User } from '@/lib/schema';
 
 const LoginSchema = z.object({
   email: z.string().email('Invalid email'),
@@ -17,8 +18,10 @@ export async function POST(req) {
     }
 
     const { email, password } = parsed.data;
-    const users = await neonQuery('SELECT id, email, password_hash FROM users WHERE email = $1', [email.toLowerCase()]);
-    const user = users[0];
+
+    await connectDB();
+
+    const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) {
       return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
     }
@@ -31,7 +34,7 @@ export async function POST(req) {
     const token = signAuthToken(user);
     return NextResponse.json({ success: true, token });
   } catch (error) {
-    console.error('Login failed:', error);
+    console.error('[Login] ERROR:', error.message);
     return NextResponse.json({ error: 'Failed to log in' }, { status: 500 });
   }
 }

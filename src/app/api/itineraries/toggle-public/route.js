@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { verifyStackAuthJWT } from '@/lib/auth';
-import { neonQuery } from '@/lib/db';
-import { ensureCoreSchema } from '@/lib/schema';
+import { connectDB } from '@/lib/mongodb';
+import { Itinerary } from '@/lib/schema';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,14 +39,13 @@ export async function POST(req) {
 
   // 3. Update the itinerary if owned by user
   try {
-    await ensureCoreSchema();
-    const checkRes = await neonQuery('SELECT id, user_id FROM itineraries WHERE id = $1', [id]);
-    const trip = checkRes[0];
-    if (!trip || trip.user_id !== user.sub) {
+    await connectDB();
+    const trip = await Itinerary.findById(id);
+    if (!trip || trip.user_id.toString() !== user.sub) {
       return NextResponse.json({ error: 'Not found or unauthorized' }, { status: 404 });
     }
 
-    await neonQuery('UPDATE itineraries SET is_public = $2 WHERE id = $1', [id, is_public]);
+    await Itinerary.findByIdAndUpdate(id, { is_public }, { new: true });
     return NextResponse.json({ success: true });
   } catch (err) {
     return NextResponse.json({ error: 'Failed to update itinerary visibility', details: err?.message || err }, { status: 500 });

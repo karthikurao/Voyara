@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { verifyStackAuthJWT } from '@/lib/auth';
-import { neonQuery } from '@/lib/db';
-import { ensureCoreSchema } from '@/lib/schema';
+import { connectDB } from '@/lib/mongodb';
+import { Itinerary } from '@/lib/schema';
 import { buildItineraryInsights, mergeChecklistState } from '@/lib/insights';
 
 export const dynamic = 'force-dynamic';
@@ -45,14 +45,12 @@ export async function POST(req) {
   }
   const { id, destination, itinerary_data, context, metadata, mode } = result.data;
 
-  await ensureCoreSchema();
-
   // 3. Update the itinerary if owned by user
   try {
+    await connectDB();
     // Check ownership
-    const checkRes = await neonQuery('SELECT * FROM itineraries WHERE id = $1', [id]);
-    const trip = checkRes[0];
-    if (!trip || trip.user_id !== user.sub) {
+    const trip = await Itinerary.findById(id);
+    if (!trip || trip.user_id.toString() !== user.sub) {
       return NextResponse.json({ error: 'Not found or unauthorized' }, { status: 404 });
     }
     const nextDestination = destination ?? trip.destination;
@@ -77,15 +75,16 @@ export async function POST(req) {
 
     const finalMetadata = nextMetadata ?? trip.metadata ?? {};
 
-    await neonQuery(
-      'UPDATE itineraries SET destination = $2, itinerary_data = $3::jsonb, context = $4::jsonb, metadata = $5::jsonb, updated_at = NOW() WHERE id = $1',
-      [
-        id,
-        nextDestination,
-        JSON.stringify(nextItineraryData),
-        JSON.stringify(combinedContext),
-        JSON.stringify(finalMetadata),
-      ],
+    await Itinerary.findByIdAndUpdate(
+      id,
+      {
+        destination: nextDestination,
+        itinerary_data: nextItineraryData,
+        context: combinedContext,
+        metadata: finalMetadata,
+        updated_at: new Date(),
+      },
+      { new: true }
     );
     return NextResponse.json({ success: true });
   } catch (err) {

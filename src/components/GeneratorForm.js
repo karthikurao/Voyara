@@ -165,7 +165,7 @@ export default function GeneratorForm() {
     if (!finalItinerary) return;
     
     // Get JWT from localStorage
-  const jwt = typeof window !== 'undefined' ? localStorage.getItem('voyaraAuthToken') : null;
+    const jwt = typeof window !== 'undefined' ? localStorage.getItem('voyaraAuthToken') : null;
     if (!jwt) {
       alert('Please log in to save itineraries.');
       return;
@@ -185,14 +185,22 @@ export default function GeneratorForm() {
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to save itinerary.');
+      console.log('[GeneratorForm] Save response status:', response.status);
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (err) {
+        console.error('[GeneratorForm] Invalid JSON response:', text);
+        throw new Error('Server returned non-JSON response');
       }
-      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to save itinerary.');
+      }
+      console.log('[GeneratorForm] Save successful');
       setSaveStatus('saved');
     } catch (err) {
-      console.error("Error saving itinerary:", err);
+      console.error('[GeneratorForm] Error saving itinerary:', err);
       alert(`Error saving itinerary: ${err.message}`);
       setSaveStatus('idle');
     }

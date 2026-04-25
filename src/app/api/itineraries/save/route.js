@@ -1,67 +1,64 @@
-import { NextResponse } from 'next/server';
-import { z } from 'zod';
-import { verifyStackAuthJWT } from '@/lib/auth';
-import { neonQuery } from '@/lib/db';
-import { ensureCoreSchema } from '@/lib/schema';
-import { buildItineraryInsights } from '@/lib/insights';
-
-export const dynamic = 'force-dynamic';
+import { NextResponse } from "next/server";
+import { connectDB } from "@/lib/mongodb";
+import { verifyStackAuthJWT } from "@/lib/auth";
+import { Itinerary } from "@/lib/schema";
 
 export async function POST(req) {
-  // Auth: Bearer token from header
-  const authHeader = req.headers.get('authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return NextResponse.json({ error: 'Missing or invalid token' }, { status: 401 });
-  }
-  const token = authHeader.replace('Bearer ', '');
-  const user = await verifyStackAuthJWT(token);
-  if (!user) {
-    return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
-  }
-
-  // Validate payload
-  const bodyText = await req.text();
-  if (bodyText.length > 500_000) {
-    return NextResponse.json({ error: 'Payload too large.' }, { status: 413 });
-  }
-  let parsedBody;
-  try { parsedBody = JSON.parse(bodyText); } catch { return NextResponse.json({ error: 'Invalid JSON payload.' }, { status: 400 }); }
-
-  const Schema = z.object({
-    destination: z.string().trim().min(1),
-    itinerary_data: z.any(),
-    context: z.any().optional(),
-  });
-  const result = Schema.safeParse(parsedBody);
-  if (!result.success) {
-    return NextResponse.json({ error: 'Invalid payload', details: result.error.flatten() }, { status: 400 });
-  }
-  const { destination, itinerary_data, context } = result.data;
-
-  await ensureCoreSchema();
-
-  const baseContext = context || itinerary_data?.context || {};
-  const insights = buildItineraryInsights(itinerary_data, {
-    ...baseContext,
-    destination,
-  });
-
-  // Insert into Neon
   try {
-  const sql = `INSERT INTO itineraries (user_id, destination, itinerary_data, context, metadata)
-         VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb)
-                 RETURNING *`;
-    const params = [
-      user.sub,
-      destination,
-      JSON.stringify(itinerary_data),
-      JSON.stringify({ ...baseContext, destination }),
-      JSON.stringify(insights),
-    ];
-  const data = await neonQuery(sql, params);
-  const created = data[0];
-    return NextResponse.json({ success: true, id: created?.id, itinerary: created });
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Missing or invalid token' }, { status: 401 });
+    }
+    const token = authHeader.replace('Bearer ', '');
+    const user = await verifyStackAuthJWT(token);
+    if (!user) {
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+    }
+
+    // Parse request body safely
+    const body = await req.json();
+
+    // Validate required fields
+    if (!body.destination || !body.itinerary_data) {
+      return NextResponse.json(
+        { error: "Missing required fields: destination or itinerary_data" },
+        { status: 400 }
+      );
+    }
+
+    // Connect to DB
+    await connectDB();
+
+    // Create itinerary
+    const newItinerary = await Itinerary.create({
+      user_id: user.sub,
+      destination: body.destination,
+      itinerary_data: body.itinerary_data,
+      context: body.context || {},
+      metadata: body.metadata || {},
+      is_public: false,
+      created_at: new Date(),
+      updated_at: new Date(),
+    });
+
+    // Always return JSON
+    return NextResponse.json(
+      {
+        success: true,
+        data: newItinerary,
+      },
+      { status: 200 }
+    );
+
   } catch (error) {
-    return NextResponse.json({ error: `Failed to save itinerary. ${error.message}` }, { status: 500 });
+    console.error("SAVE ERROR:", error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Failed to save itinerary",
+      },
+      { status: 500 }
+    );
   }
 }

@@ -34,7 +34,7 @@ export default function SavedItineraryList({ savedItineraries, onReload }) {
   useEffect(() => {
     const mapped = {};
     (savedItineraries || []).forEach((trip) => {
-      mapped[trip.id] = trip.metadata || null;
+      mapped[trip._id] = trip.metadata || null;
     });
     setMetadataState(mapped);
   }, [savedItineraries]);
@@ -46,7 +46,7 @@ export default function SavedItineraryList({ savedItineraries, onReload }) {
   };
 
   const handleEdit = (trip) => {
-    setEditTripId(trip.id);
+    setEditTripId(trip._id);
     setEditData(JSON.parse(JSON.stringify(trip.itinerary_data)));
   };
 
@@ -77,12 +77,23 @@ export default function SavedItineraryList({ savedItineraries, onReload }) {
         },
         body: JSON.stringify({ destination: trip.destination, itinerary_data: editData, context: trip.context }),
       });
-      if (!res.ok) throw new Error((await res.json())?.error || 'Failed to save');
+      console.log('[SavedItineraryList] Save response status:', res.status);
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (err) {
+        console.error('[SavedItineraryList] Invalid JSON response:', text);
+        throw new Error('Server returned non-JSON response');
+      }
+      if (!res.ok) throw new Error(data?.error || 'Failed to save');
+      console.log('[SavedItineraryList] Save successful');
       setEditTripId(null);
       setEditData(null);
       alert('Saved as new version!');
       if (onReload) onReload();
     } catch (err) {
+      console.error('[SavedItineraryList] Error:', err.message);
       alert('Failed to save: ' + err.message);
     }
   };
@@ -116,7 +127,7 @@ export default function SavedItineraryList({ savedItineraries, onReload }) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${jwt}`,
         },
-        body: JSON.stringify({ id: trip.id }),
+        body: JSON.stringify({ id: trip._id }),
       });
       if (!res.ok) throw new Error((await res.json())?.error || 'Failed to duplicate');
       alert('Duplicated!');
@@ -135,7 +146,7 @@ export default function SavedItineraryList({ savedItineraries, onReload }) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${jwt}`,
         },
-        body: JSON.stringify({ id: trip.id, is_public: !trip.is_public }),
+        body: JSON.stringify({ id: trip._id, is_public: !trip.is_public }),
       });
       if (!res.ok) throw new Error((await res.json())?.error || 'Failed to toggle');
       alert('Visibility updated!');
@@ -279,7 +290,7 @@ export default function SavedItineraryList({ savedItineraries, onReload }) {
   };
 
   const renderMetadataPanel = (trip) => {
-    const metadata = metadataState[trip.id];
+    const metadata = metadataState[trip._id];
     if (!metadata) return null;
 
     return (
@@ -329,7 +340,7 @@ export default function SavedItineraryList({ savedItineraries, onReload }) {
               <li key={`${entry.item}-${index}`} className="flex items-start gap-3">
                 <button
                   type="button"
-                  onClick={() => togglePackingItem(trip.id, index)}
+                  onClick={() => togglePackingItem(trip._id, index)}
                   className="mt-0.5 text-purple-300 hover:text-purple-100"
                 >
                   {entry.checked ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
@@ -343,14 +354,14 @@ export default function SavedItineraryList({ savedItineraries, onReload }) {
           </ul>
           <div className="flex gap-2">
             <input
-              value={newPackingItem[trip.id] || ''}
-              onChange={(e) => setNewPackingItem((prev) => ({ ...prev, [trip.id]: e.target.value }))}
+              value={newPackingItem[trip._id] || ''}
+              onChange={(e) => setNewPackingItem((prev) => ({ ...prev, [trip._id]: e.target.value }))}
               placeholder="Add custom item"
               className="flex-1 rounded bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
             <button
               type="button"
-              onClick={() => addPackingItem(trip.id)}
+              onClick={() => addPackingItem(trip._id)}
               className="bg-purple-600 text-white px-3 py-2 rounded text-sm hover:bg-purple-700"
             >
               Add
@@ -367,7 +378,7 @@ export default function SavedItineraryList({ savedItineraries, onReload }) {
               <li key={`${entry.task}-${index}`} className="flex items-start gap-3">
                 <button
                   type="button"
-                  onClick={() => togglePrepTask(trip.id, index)}
+                  onClick={() => togglePrepTask(trip._id, index)}
                   className="mt-0.5 text-purple-300 hover:text-purple-100"
                 >
                   {entry.done ? <CheckSquare className="w-5 h-5" /> : <Square className="w-5 h-5" />}
@@ -381,14 +392,14 @@ export default function SavedItineraryList({ savedItineraries, onReload }) {
           </ul>
           <div className="flex gap-2">
             <input
-              value={newPrepTask[trip.id] || ''}
-              onChange={(e) => setNewPrepTask((prev) => ({ ...prev, [trip.id]: e.target.value }))}
+              value={newPrepTask[trip._id] || ''}
+              onChange={(e) => setNewPrepTask((prev) => ({ ...prev, [trip._id]: e.target.value }))}
               placeholder="Add prep item"
               className="flex-1 rounded bg-gray-800 border border-gray-700 px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
             <button
               type="button"
-              onClick={() => addPrepTask(trip.id)}
+              onClick={() => addPrepTask(trip._id)}
               className="bg-purple-600 text-white px-3 py-2 rounded text-sm hover:bg-purple-700"
             >
               Add
@@ -402,12 +413,20 @@ export default function SavedItineraryList({ savedItineraries, onReload }) {
   return (
     <div className="space-y-6">
       {savedItineraries.map((trip) => (
-        <div key={trip.id} className="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
-          <button
-            onClick={() => handleToggleExpand(trip.id)}
-            className="w-full p-4 sm:p-6 text-left bg-gray-700/50 hover:bg-gray-700/80 transition-colors focus:outline-none"
-            aria-expanded={expandedTripId === trip.id}
-            aria-controls={`trip-details-${trip.id}`}
+        <div key={trip._id} className="bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+          <div
+            onClick={() => handleToggleExpand(trip._id)}
+            className="w-full p-4 sm:p-6 text-left bg-gray-700/50 hover:bg-gray-700/80 transition-colors focus:outline-none cursor-pointer"
+            role="button"
+            tabIndex={0}
+            aria-expanded={expandedTripId === trip._id}
+            aria-controls={`trip-details-${trip._id}`}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleToggleExpand(trip._id);
+              }
+            }}
           >
             <div className="flex justify-between items-center">
               <div>
@@ -419,36 +438,36 @@ export default function SavedItineraryList({ savedItineraries, onReload }) {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={() => handleEdit(trip)} title="Edit" className="p-2 rounded hover:bg-purple-700/30">
+                <button onClick={(e) => { e.stopPropagation(); handleEdit(trip); }} title="Edit" className="p-2 rounded hover:bg-purple-700/30">
                   <Edit3 className="w-5 h-5 text-purple-400" />
                 </button>
-                <button onClick={() => handleDuplicate(trip)} title="Duplicate" className="p-2 rounded hover:bg-blue-700/30">
+                <button onClick={(e) => { e.stopPropagation(); handleDuplicate(trip); }} title="Duplicate" className="p-2 rounded hover:bg-blue-700/30">
                   <Copy className="w-5 h-5 text-blue-400" />
                 </button>
-                <button onClick={() => handleDelete(trip.id)} title="Delete" className="p-2 rounded hover:bg-red-700/30">
+                <button onClick={(e) => { e.stopPropagation(); handleDelete(trip._id); }} title="Delete" className="p-2 rounded hover:bg-red-700/30">
                   <Trash2 className="w-5 h-5 text-red-400" />
                 </button>
-                <button onClick={() => handleShowShares(trip.id)} title="Manage Shares" className="p-2 rounded hover:bg-green-700/30">
+                <button onClick={(e) => { e.stopPropagation(); handleShowShares(trip._id); }} title="Manage Shares" className="p-2 rounded hover:bg-green-700/30">
                   <Share2 className="w-5 h-5 text-green-400" />
                 </button>
-                <button onClick={() => handleTogglePublic(trip)} title="Toggle Public/Private" className="p-2 rounded hover:bg-gray-700/30">
+                <button onClick={(e) => { e.stopPropagation(); handleTogglePublic(trip); }} title="Toggle Public/Private" className="p-2 rounded hover:bg-gray-700/30">
                   {trip.is_public ? <Unlock className="w-5 h-5 text-yellow-400" /> : <Lock className="w-5 h-5 text-gray-400" />}
                 </button>
-                <ShareButton itineraryId={trip.id} destination={trip.destination} />
-                {expandedTripId === trip.id ? (
+                <ShareButton itineraryId={trip._id} destination={trip.destination} />
+                {expandedTripId === trip._id ? (
                   <ChevronUp className="w-5 h-5 text-gray-300" />
                 ) : (
                   <ChevronDown className="w-5 h-5 text-gray-300" />
                 )}
               </div>
             </div>
-          </button>
+          </div>
 
-          {expandedTripId === trip.id && (
-            <div id={`trip-details-${trip.id}`} className="p-4 sm:p-6 border-t border-gray-700">
+          {expandedTripId === trip._id && (
+            <div id={`trip-details-${trip._id}`} className="p-4 sm:p-6 border-t border-gray-700">
               {renderMetadataPanel(trip)}
 
-              {editTripId === trip.id && editData ? (
+              {editTripId === trip._id && editData ? (
                 <div className="space-y-6">
                   {editData.itinerary.map((day, dayIdx) => (
                     <div key={dayIdx} className="mb-4">
@@ -538,7 +557,7 @@ export default function SavedItineraryList({ savedItineraries, onReload }) {
                 trip.itinerary_data.itinerary?.map((dayData, index) => <ItineraryCard key={index} dayData={dayData} />)
               )}
 
-              {showSharesId === trip.id && (
+              {showSharesId === trip._id && (
                 <div className="mt-6 p-4 bg-gray-900 rounded border border-green-400">
                   <h3 className="text-lg font-bold text-green-400 mb-2">Manage Share Links</h3>
                   {loadingShares ? (

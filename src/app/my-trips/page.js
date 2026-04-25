@@ -1,10 +1,12 @@
 
 "use client";
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import SavedItineraryList from '@/components/SavedItineraryList';
 
 export default function MyTripsPage() {
+  const router = useRouter();
   const [savedItineraries, setSavedItineraries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -13,11 +15,10 @@ export default function MyTripsPage() {
     setLoading(true);
     setError(null);
     try {
-  const jwt = window.localStorage.getItem('voyaraAuthToken');
+      const jwt = window.localStorage.getItem('voyaraAuthToken');
       if (!jwt) {
-        setError('Please log in to view saved trips.');
-        setSavedItineraries([]);
         setLoading(false);
+        router.push('/login');
         return;
       }
       const res = await fetch('/api/itineraries/list', {

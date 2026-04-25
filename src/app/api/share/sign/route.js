@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { SignJWT } from 'jose';
 import { verifyStackAuthJWT } from '@/lib/auth';
-import { neonQuery } from '@/lib/db';
-import { ensureCoreSchema } from '@/lib/schema';
+import { connectDB } from '@/lib/mongodb';
+import { Itinerary } from '@/lib/schema';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,7 +14,7 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Invalid origin' }, { status: 403 });
     }
 
-  // Verify user authentication via Voyara JWT
+    // Verify user authentication via Voyara JWT
     const authHeader = req.headers.get('authorization') || '';
     const jwt = authHeader.replace(/^Bearer /i, '');
     const user = await verifyStackAuthJWT(jwt);
@@ -38,10 +38,9 @@ export async function POST(req) {
     if (!itineraryId) return NextResponse.json({ error: 'Missing itineraryId' }, { status: 400 });
 
     // Ensure the itinerary belongs to the requesting user
-  await ensureCoreSchema();
-  const checkRes = await neonQuery('SELECT id, user_id FROM itineraries WHERE id = $1', [itineraryId]);
-    const trip = checkRes[0];
-    if (!trip || trip.user_id !== user.sub) {
+    await connectDB();
+    const trip = await Itinerary.findById(itineraryId);
+    if (!trip || trip.user_id.toString() !== user.sub) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
