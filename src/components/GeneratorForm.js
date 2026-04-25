@@ -166,17 +166,13 @@ export default function GeneratorForm() {
     
     // Get JWT from localStorage
     const jwt = typeof window !== 'undefined' ? localStorage.getItem('voyaraAuthToken') : null;
-    console.log('[GeneratorForm] Retrieved token:', jwt ? `Token found (length: ${jwt.length})` : 'NO TOKEN FOUND');
     if (!jwt) {
-      console.warn('[GeneratorForm] No token available - cannot save');
       alert('Please log in to save itineraries.');
       return;
     }
     
-    console.log('[GeneratorForm] Token valid, proceeding with save');
     setSaveStatus('saving');
     try {
-      console.log('[GeneratorForm] Sending save request with Authorization header');
       const response = await fetch('/api/itineraries/save', {
         method: 'POST',
         headers: { 
