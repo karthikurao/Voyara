@@ -20,40 +20,37 @@ export function signAuthToken(user) {
     throw new Error('AUTH_SECRET is not configured');
   }
 
-  console.log('[Auth] signAuthToken called for user:', { _id: user._id, id: user.id, email: user.email });
-  
   const payload = {
     sub: user._id || user.id,
     email: user.email,
   };
-  
-  console.log('[Auth] Token payload:', payload);
-  
-  const token = jwt.sign(payload, AUTH_SECRET, { expiresIn: '7d' });
-  console.log('[Auth] Token signed successfully');
-  
-  return token;
+
+  return jwt.sign(payload, AUTH_SECRET, { expiresIn: '7d' });
 }
 
 export async function verifyStackAuthJWT(token) {
-  console.log('[Auth] verifyStackAuthJWT called with token:', token ? `Token present (length: ${token.length})` : 'NO TOKEN');
-  
-  // TEMPORARY: Bypass JWT verification for development
-  if (token) {
-    console.log('[Auth] ⚠️ BYPASSING JWT VERIFICATION - returning test user');
+  if (!token) {
+    return null;
+  }
+
+  const allowDevAuthBypass =
+    process.env.NODE_ENV !== 'production' &&
+    process.env.ALLOW_DEV_AUTH_BYPASS === 'true';
+
+  if (allowDevAuthBypass) {
+    console.warn('[Auth] Development auth bypass enabled - returning test user');
     return { sub: 'test-user-id', email: 'test@example.com' };
   }
-  
-  console.log('[Auth] No token provided - returning null');
-  return null;
 
-  // Original implementation (commented out for now):
-  // if (!token) {
-  //   return null;
-  // }
-  // try {
-  //   return jwt.verify(token, AUTH_SECRET);
-  // } catch (err) {
-  //   return null;
-  // }
+  if (!AUTH_SECRET) {
+    console.warn('[Auth] AUTH_SECRET is not configured - returning null');
+    return null;
+  }
+
+  try {
+    return jwt.verify(token, AUTH_SECRET);
+  } catch (err) {
+    console.warn('[Auth] JWT verification failed:', err.message);
+    return null;
+  }
 }

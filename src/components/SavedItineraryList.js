@@ -438,19 +438,19 @@ export default function SavedItineraryList({ savedItineraries, onReload }) {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={() => handleEdit(trip)} title="Edit" className="p-2 rounded hover:bg-purple-700/30">
+                <button onClick={(e) => { e.stopPropagation(); handleEdit(trip); }} title="Edit" className="p-2 rounded hover:bg-purple-700/30">
                   <Edit3 className="w-5 h-5 text-purple-400" />
                 </button>
-                <button onClick={() => handleDuplicate(trip)} title="Duplicate" className="p-2 rounded hover:bg-blue-700/30">
+                <button onClick={(e) => { e.stopPropagation(); handleDuplicate(trip); }} title="Duplicate" className="p-2 rounded hover:bg-blue-700/30">
                   <Copy className="w-5 h-5 text-blue-400" />
                 </button>
-                <button onClick={() => handleDelete(trip._id)} title="Delete" className="p-2 rounded hover:bg-red-700/30">
+                <button onClick={(e) => { e.stopPropagation(); handleDelete(trip._id); }} title="Delete" className="p-2 rounded hover:bg-red-700/30">
                   <Trash2 className="w-5 h-5 text-red-400" />
                 </button>
-                <button onClick={() => handleShowShares(trip._id)} title="Manage Shares" className="p-2 rounded hover:bg-green-700/30">
+                <button onClick={(e) => { e.stopPropagation(); handleShowShares(trip._id); }} title="Manage Shares" className="p-2 rounded hover:bg-green-700/30">
                   <Share2 className="w-5 h-5 text-green-400" />
                 </button>
-                <button onClick={() => handleTogglePublic(trip)} title="Toggle Public/Private" className="p-2 rounded hover:bg-gray-700/30">
+                <button onClick={(e) => { e.stopPropagation(); handleTogglePublic(trip); }} title="Toggle Public/Private" className="p-2 rounded hover:bg-gray-700/30">
                   {trip.is_public ? <Unlock className="w-5 h-5 text-yellow-400" /> : <Lock className="w-5 h-5 text-gray-400" />}
                 </button>
                 <ShareButton itineraryId={trip._id} destination={trip.destination} />
@@ -467,7 +467,7 @@ export default function SavedItineraryList({ savedItineraries, onReload }) {
             <div id={`trip-details-${trip._id}`} className="p-4 sm:p-6 border-t border-gray-700">
               {renderMetadataPanel(trip)}
 
-              {editTripId === trip.id && editData ? (
+              {editTripId === trip._id && editData ? (
                 <div className="space-y-6">
                   {editData.itinerary.map((day, dayIdx) => (
                     <div key={dayIdx} className="mb-4">
@@ -557,7 +557,7 @@ export default function SavedItineraryList({ savedItineraries, onReload }) {
                 trip.itinerary_data.itinerary?.map((dayData, index) => <ItineraryCard key={index} dayData={dayData} />)
               )}
 
-              {showSharesId === trip.id && (
+              {showSharesId === trip._id && (
                 <div className="mt-6 p-4 bg-gray-900 rounded border border-green-400">
                   <h3 className="text-lg font-bold text-green-400 mb-2">Manage Share Links</h3>
                   {loadingShares ? (

@@ -1,12 +1,22 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/lib/mongodb";
+import { verifyStackAuthJWT } from "@/lib/auth";
 import { Itinerary } from "@/lib/schema";
 
 export async function POST(req) {
   try {
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Missing or invalid token' }, { status: 401 });
+    }
+    const token = authHeader.replace('Bearer ', '');
+    const user = await verifyStackAuthJWT(token);
+    if (!user) {
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+    }
+
     // Parse request body safely
     const body = await req.json();
-    console.log("Incoming body:", body);
 
     // Validate required fields
     if (!body.destination || !body.itinerary_data) {
@@ -21,7 +31,7 @@ export async function POST(req) {
 
     // Create itinerary
     const newItinerary = await Itinerary.create({
-      user_id: "test-user", // temporary (auth bypass)
+      user_id: user.sub,
       destination: body.destination,
       itinerary_data: body.itinerary_data,
       context: body.context || {},
@@ -30,8 +40,6 @@ export async function POST(req) {
       created_at: new Date(),
       updated_at: new Date(),
     });
-
-    console.log("Saved itinerary:", newItinerary);
 
     // Always return JSON
     return NextResponse.json(
@@ -48,7 +56,7 @@ export async function POST(req) {
     return NextResponse.json(
       {
         success: false,
-        error: error.message || "Internal Server Error",
+        error: "Internal Server Error",
       },
       { status: 500 }
     );

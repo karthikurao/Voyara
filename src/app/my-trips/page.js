@@ -16,9 +16,8 @@ export default function MyTripsPage() {
     setError(null);
     try {
       const jwt = window.localStorage.getItem('voyaraAuthToken');
-      console.log('[Frontend] Token from localStorage:', jwt ? 'Token found (length: ' + jwt.length + ')' : 'NO TOKEN FOUND');
       if (!jwt) {
-        console.warn('[Frontend] No token - redirecting to login');
+        setLoading(false);
         router.push('/login');
         return;
       }
@@ -28,10 +27,8 @@ export default function MyTripsPage() {
           'Authorization': `Bearer ${jwt}`,
         },
       });
-      console.log('[Frontend] Response status:', res.status);
       if (!res.ok) throw new Error((await res.json())?.error || 'Failed to fetch trips');
       const data = await res.json();
-      console.log('[Frontend] Successfully fetched itineraries:', data.itineraries?.length || 0);
       setSavedItineraries(data.itineraries || []);
     } catch (err) {
       setError(err.message);
